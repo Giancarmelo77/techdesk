@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TechDesk — Gestione Interventi</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f0f11; --surface: #18181c; --surface2: #222228; --border: #2e2e38;
+    --accent: #f0c040; --accent2: #3ecfcf; --red: #f05050; --green: #50d090;
+    --orange: #f09050; --text: #e8e8f0; --muted: #7878a0;
+    --font: 'Syne', sans-serif; --mono: 'DM Mono', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); min-height: 100vh; }
+  .app { display: flex; height: 100vh; overflow: hidden; }
+  .sidebar { width: 240px; min-width: 240px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+  .main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+  .logo { padding: 24px 20px 20px; border-bottom: 1px solid var(--border); font-size: 20px; font-weight: 800; letter-spacing: -0.5px; color: var(--accent); }
+  .logo span { color: var(--text); font-weight: 400; }
+  .nav { padding: 12px 0; flex: 1; }
+  .nav-item { display: flex; align-items: center; gap: 12px; padding: 11px 20px; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--muted); transition: all .15s; border-left: 3px solid transparent; user-select: none; }
+  .nav-item:hover { color: var(--text); background: var(--surface2); }
+  .nav-item.active { color: var(--accent); border-left-color: var(--accent); background: rgba(240,192,64,0.06); }
+  .nav-item .icon { font-size: 16px; width: 20px; text-align: center; }
+  .nav-section { padding: 16px 20px 6px; font-size: 10px; font-weight: 700; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; }
+  .sync-status { padding: 16px 20px; border-top: 1px solid var(--border); font-size: 11px; font-family: var(--mono); display: flex; align-items: center; gap: 8px; color: var(--muted); }
+  .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+  .sync-dot.ok { background: var(--green); }
+  .sync-dot.syncing { background: var(--accent); animation: pulse 1s infinite; }
+  .sync-dot.error { background: var(--red); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+  .topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-shrink: 0; }
+  .topbar-title { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
+  .topbar-actions { display: flex; gap: 10px; align-items: center; }
+  .btn { padding: 9px 18px; border-radius: 6px; border: none; cursor: pointer; font-family: var(--font); font-size: 13px; font-weight: 700; transition: all .15s; }
+  .btn-primary { background: var(--accent); color: #111; }
+  .btn-primary:hover { background: #f5d060; transform: translateY(-1px); }
+  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { border-color: var(--muted); }
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
+  .btn-danger { background: rgba(240,80,80,0.15); color: var(--red); border: 1px solid rgba(240,80,80,0.3); }
+  .content { padding: 24px 28px; flex: 1; }
+  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; position: relative; overflow: hidden; }
+  .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+  .stat-card.yellow::before { background: var(--accent); }
+  .stat-card.teal::before { background: var(--accent2); }
+  .stat-card.green::before { background: var(--green); }
+  .stat-card.red::before { background: var(--red); }
+  .stat-label { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  .stat-value { font-size: 36px; font-weight: 800; letter-spacing: -1px; line-height: 1; }
+  .stat-card.yellow .stat-value { color: var(--accent); }
+  .stat-card.teal .stat-value { color: var(--accent2); }
+  .stat-card.green .stat-value { color: var(--green); }
+  .stat-card.red .stat-value { color: var(--red); }
+  .filters { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+  .filter-btn { padding: 7px 16px; border-radius: 20px; border: 1px solid var(--border); background: var(--surface2); color: var(--muted); font-family: var(--font); font-size: 12px; font-weight: 700; cursor: pointer; transition: all .15s; }
+  .filter-btn:hover { color: var(--text); border-color: var(--muted); }
+  .filter-btn.active { background: var(--accent); color: #111; border-color: var(--accent); }
+  .search-input { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 8px 14px; color: var(--text); font-family: var(--mono); font-size: 13px; outline: none; width: 220px; transition: border-color .15s; }
+  .search-input:focus { border-color: var(--accent); }
+  .search-input::placeholder { color: var(--muted); }
+  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th { padding: 12px 16px; text-align: left; font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); background: var(--surface2); border-bottom: 1px solid var(--border); }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; cursor: pointer; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--surface2); }
+  tbody td { padding: 14px 16px; font-size: 13px; vertical-align: middle; }
+  .td-id { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .td-title { font-weight: 600; }
+  .badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; font-family: var(--mono); }
+  .badge-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .badge-aperto { background: rgba(62,207,207,0.12); color: var(--accent2); }
+  .badge-aperto .badge-dot { background: var(--accent2); }
+  .badge-progress { background: rgba(240,192,64,0.12); color: var(--accent); }
+  .badge-progress .badge-dot { background: var(--accent); animation: pulse 1.5s infinite; }
+  .badge-chiuso { background: rgba(80,208,144,0.12); color: var(--green); }
+  .badge-chiuso .badge-dot { background: var(--green); }
+  .badge-attesa { background: rgba(240,144,80,0.12); color: var(--orange); }
+  .badge-attesa .badge-dot { background: var(--orange); }
+  .priority { font-family: var(--mono); font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 500; }
+  .priority-alta { background: rgba(240,80,80,0.12); color: var(--red); }
+  .priority-media { background: rgba(240,192,64,0.12); color: var(--accent); }
+  .priority-bassa { background: rgba(80,208,144,0.12); color: var(--green); }
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 100; display: none; align-items: center; justify-content: center; padding: 20px; }
+  .overlay.open { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto; animation: slideUp .25s ease; }
+  @keyframes slideUp { from{transform:translateY(20px);opacity:0} to{transform:translateY(0);opacity:1} }
+  .modal-header { padding: 24px 28px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .modal-title { font-size: 20px; font-weight: 800; }
+  .modal-close { width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface2); color: var(--muted); cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; transition: all .15s; }
+  .modal-close:hover { color: var(--text); }
+  .modal-body { padding: 24px 28px; }
+  .modal-footer { padding: 16px 28px 24px; display: flex; gap: 10px; justify-content: flex-end; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .form-group { display: flex; flex-direction: column; gap: 7px; }
+  .form-group.full { grid-column: 1 / -1; }
+  .form-label { font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+  .form-control { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; color: var(--text); font-family: var(--font); font-size: 14px; outline: none; transition: border-color .15s; width: 100%; }
+  .form-control:focus { border-color: var(--accent); }
+  .form-control option { background: var(--surface2); }
+  textarea.form-control { resize: vertical; min-height: 80px; }
+  .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+  .detail-item.full { grid-column: 1 / -1; }
+  .detail-key { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; }
+  .detail-val { font-size: 14px; color: var(--text); }
+  .detail-divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+  .cal-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .cal-nav-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text); width: 32px; height: 32px; border-radius: 6px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all .15s; }
+  .cal-nav-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .cal-month-title { font-size: 18px; font-weight: 800; }
+  .cal-header { display: grid; grid-template-columns: repeat(7,1fr); gap: 4px; margin-bottom: 8px; }
+  .cal-day-name { text-align: center; font-size: 10px; font-weight: 700; color: var(--muted); padding: 4px; letter-spacing: 1px; text-transform: uppercase; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 4px; }
+  .cal-day { aspect-ratio: 1; border-radius: 6px; background: var(--surface2); border: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 13px; cursor: pointer; transition: all .15s; position: relative; }
+  .cal-day:hover { border-color: var(--accent); color: var(--accent); }
+  .cal-day.today { border-color: var(--accent); color: var(--accent); font-weight: 800; }
+  .cal-day.other-month { opacity: .3; }
+  .cal-day.has-events::after { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); position: absolute; bottom: 5px; }
+  .events-today { margin-top: 24px; }
+  .event-row { display: flex; align-items: center; gap: 14px; padding: 12px 16px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; cursor: pointer; }
+  .event-time { font-family: var(--mono); font-size: 12px; color: var(--muted); min-width: 50px; }
+  .event-title { font-size: 13px; font-weight: 700; }
+  .event-client { font-size: 12px; color: var(--muted); }
+  .client-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px,1fr)); gap: 16px; }
+  .client-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; cursor: pointer; transition: all .15s; }
+  .client-card:hover { border-color: var(--accent2); transform: translateY(-2px); }
+  .client-name { font-size: 16px; font-weight: 800; margin-bottom: 6px; }
+  .client-meta { font-size: 12px; color: var(--muted); line-height: 1.8; font-family: var(--mono); }
+  .client-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; margin-top: 12px; padding: 4px 10px; border-radius: 20px; background: rgba(62,207,207,0.1); color: var(--accent2); font-weight: 700; }
+  .mob-toggle { display: none; background: none; border: none; color: var(--text); font-size: 22px; cursor: pointer; padding: 4px; }
+  .loading-overlay { position: fixed; inset: 0; background: var(--bg); z-index: 999; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; }
+  .loading-spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { font-family: var(--mono); font-size: 14px; color: var(--muted); }
+  .toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 8px; font-size: 13px; font-weight: 700; z-index: 999; transform: translateY(80px); opacity: 0; transition: all .3s; }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.success { background: var(--green); color: #0f1f18; }
+  .toast.error { background: var(--red); color: #fff; }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  @media(max-width:768px){
+    .mob-toggle { display: block; }
+    .sidebar { position: fixed; top: 0; left: 0; bottom: 0; z-index: 200; transform: translateX(-100%); transition: transform .3s; }
+    .sidebar.open { transform: translateX(0); }
+    .stats-grid { grid-template-columns: repeat(2,1fr); }
+    .form-grid { grid-template-columns: 1fr; }
+    .detail-grid { grid-template-columns: 1fr; }
+    table thead th:nth-child(n+4) { display: none; }
+    table tbody td:nth-child(n+4) { display: none; }
+    .content { padding: 16px; }
+    .topbar { padding: 12px 16px; }
+    .topbar-title { font-size: 18px; }
+    .cal-grid, .cal-header { gap: 2px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div class="loading-overlay" id="loading-overlay">
+  <div class="loading-spinner"></div>
+  <div class="loading-text" id="loading-text">Connessione a Google Sheets...</div>
+</div>
+
+<div class="app">
+  <nav class="sidebar" id="sidebar">
+    <div class="logo">Tech<span>Desk</span></div>
+    <div class="nav">
+      <div class="nav-section">Menu</div>
+      <div class="nav-item active" onclick="showPage('dashboard')"><span class="icon">⚡</span> Dashboard</div>
+      <div class="nav-item" onclick="showPage('interventi')"><span class="icon">🔧</span> Interventi</div>
+      <div class="nav-item" onclick="showPage('calendario')"><span class="icon">📅</span> Calendario</div>
+      <div class="nav-item" onclick="showPage('clienti')"><span class="icon">🏢</span> Clienti</div>
+    </div>
+    <div class="sync-status">
+      <div class="sync-dot" id="sync-dot"></div>
+      <span id="sync-label">In attesa...</span>
+    </div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="mob-toggle" onclick="toggleSidebar()">☰</button>
+        <div class="topbar-title" id="page-title">Dashboard</div>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn btn-secondary btn-sm" onclick="syncAll()" title="Aggiorna dati">↻ Sync</button>
+        <button class="btn btn-primary" id="main-action-btn" onclick="openNewIntervento()">+ Nuovo Intervento</button>
+      </div>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div class="content" id="page-dashboard">
+      <div class="stats-grid">
+        <div class="stat-card yellow"><div class="stat-label">Totale</div><div class="stat-value" id="stat-total">—</div></div>
+        <div class="stat-card teal"><div class="stat-label">In Corso</div><div class="stat-value" id="stat-progress">—</div></div>
+        <div class="stat-card green"><div class="stat-label">Chiusi</div><div class="stat-value" id="stat-closed">—</div></div>
+        <div class="stat-card red"><div class="stat-label">Alta Priorità</div><div class="stat-value" id="stat-high">—</div></div>
+      </div>
+      <div style="font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:14px">Ultimi Interventi</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>ID</th><th>Titolo</th><th>Cliente</th><th>Stato</th><th>Priorità</th><th>Data</th></tr></thead>
+        <tbody id="dash-tbody"></tbody>
+      </table></div>
+    </div>
+
+    <!-- INTERVENTI -->
+    <div class="content" id="page-interventi" style="display:none">
+      <div class="filters">
+        <input class="search-input" placeholder="🔍 Cerca..." oninput="renderTable()" id="search-input">
+        <button class="filter-btn active" onclick="setFilter('tutti',this)">Tutti</button>
+        <button class="filter-btn" onclick="setFilter('aperto',this)">Aperti</button>
+        <button class="filter-btn" onclick="setFilter('in-corso',this)">In Corso</button>
+        <button class="filter-btn" onclick="setFilter('in-attesa',this)">In Attesa</button>
+        <button class="filter-btn" onclick="setFilter('chiuso',this)">Chiusi</button>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>ID</th><th>Titolo</th><th>Cliente</th><th>Stato</th><th>Priorità</th><th>Data</th><th></th></tr></thead>
+        <tbody id="main-tbody"></tbody>
+      </table></div>
+    </div>
+
+    <!-- CALENDARIO -->
+    <div class="content" id="page-calendario" style="display:none">
+      <div style="max-width:700px">
+        <div class="cal-nav">
+          <button class="cal-nav-btn" onclick="changeMonth(-1)">‹</button>
+          <div class="cal-month-title" id="cal-title"></div>
+          <button class="cal-nav-btn" onclick="changeMonth(1)">›</button>
+        </div>
+        <div class="cal-header">
+          <div class="cal-day-name">Lun</div><div class="cal-day-name">Mar</div><div class="cal-day-name">Mer</div>
+          <div class="cal-day-name">Gio</div><div class="cal-day-name">Ven</div><div class="cal-day-name">Sab</div><div class="cal-day-name">Dom</div>
+        </div>
+        <div class="cal-grid" id="cal-grid"></div>
+        <div class="events-today" id="events-list"></div>
+      </div>
+    </div>
+
+    <!-- CLIENTI -->
+    <div class="content" id="page-clienti" style="display:none">
+      <div class="client-cards" id="client-grid"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL INTERVENTO -->
+<div class="overlay" id="modal-intervento">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-int-title">Nuovo Intervento</div>
+      <button class="modal-close" onclick="closeModal('modal-intervento')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group full"><label class="form-label">Titolo *</label><input class="form-control" id="f-titolo" placeholder="Es. Sostituzione pompa idraulica"></div>
+        <div class="form-group"><label class="form-label">Cliente *</label><select class="form-control" id="f-cliente"><option value="">— Seleziona —</option></select></div>
+        <div class="form-group"><label class="form-label">Stato</label><select class="form-control" id="f-stato"><option value="aperto">Aperto</option><option value="in-corso">In Corso</option><option value="in-attesa">In Attesa</option><option value="chiuso">Chiuso</option></select></div>
+        <div class="form-group"><label class="form-label">Priorità</label><select class="form-control" id="f-priorita"><option value="bassa">Bassa</option><option value="media">Media</option><option value="alta">Alta</option></select></div>
+        <div class="form-group"><label class="form-label">Data</label><input class="form-control" id="f-data" type="date"></div>
+        <div class="form-group"><label class="form-label">Orario</label><input class="form-control" id="f-orario" type="time"></div>
+        <div class="form-group full"><label class="form-label">Indirizzo</label><input class="form-control" id="f-indirizzo" placeholder="Via, Città"></div>
+        <div class="form-group full"><label class="form-label">Descrizione</label><textarea class="form-control" id="f-descrizione"></textarea></div>
+        <div class="form-group full"><label class="form-label">Note interne</label><textarea class="form-control" id="f-note"></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-intervento')">Annulla</button>
+      <button class="btn btn-primary" onclick="saveIntervento()" id="btn-save-int">Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DETTAGLIO -->
+<div class="overlay" id="modal-detail">
+  <div class="modal">
+    <div class="modal-header">
+      <div><div class="modal-title" id="det-titolo"></div><div style="color:var(--muted);font-size:12px;font-family:var(--mono);margin-top:4px" id="det-id"></div></div>
+      <button class="modal-close" onclick="closeModal('modal-detail')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="detail-grid" id="detail-body"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" id="det-delete-btn">🗑 Elimina</button>
+      <button class="btn btn-secondary" onclick="closeModal('modal-detail')">Chiudi</button>
+      <button class="btn btn-primary btn-sm" id="det-edit-btn">✏️ Modifica</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CLIENTE -->
+<div class="overlay" id="modal-cliente">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-cli-title">Nuovo Cliente</div>
+      <button class="modal-close" onclick="closeModal('modal-cliente')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group full"><label class="form-label">Ragione Sociale *</label><input class="form-control" id="c-nome" placeholder="Es. Rossi Impianti Srl"></div>
+        <div class="form-group"><label class="form-label">Referente</label><input class="form-control" id="c-ref" placeholder="Nome Cognome"></div>
+        <div class="form-group"><label class="form-label">Telefono</label><input class="form-control" id="c-tel" placeholder="+39 ..."></div>
+        <div class="form-group"><label class="form-label">Email</label><input class="form-control" id="c-email" type="email"></div>
+        <div class="form-group"><label class="form-label">Città</label><input class="form-control" id="c-citta"></div>
+        <div class="form-group full"><label class="form-label">Note</label><textarea class="form-control" id="c-note"></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-cliente')">Annulla</button>
+      <button class="btn btn-primary" onclick="saveCliente()" id="btn-save-cli">Salva</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── CONFIG ───────────────────────────────────────────────────────────────────
+const SHEET_ID = '1hqDCUSFaDBwyPnP3d_dFUBsHNrnC3LZNdyFKz2FAEn4';
+const API_KEY_PLACEHOLDER = ''; // lascia vuoto — usa OAuth via gapi
+const DISCOVERY_DOC = 'https://sheets.googleapis.com/$discovery/rest?version=v4';
+const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let interventi = [];
+let clienti = [];
+let editingId = null;
+let editingClienteId = null;
+let currentFilter = 'tutti';
+let currentPage = 'dashboard';
+let calYear, calMonth;
+let tokenClient, gapiInited = false, gisInited = false;
+
+// ─── GOOGLE API INIT ──────────────────────────────────────────────────────────
+// We use a Client ID from Google Cloud — public OAuth for installed apps
+// The user will see a Google login popup the first time
+const CLIENT_ID = ''; // populated below via prompt flow
+
+function gapiLoaded() {
+  gapi.load('client', async () => {
+    await gapi.client.init({ discoveryDocs: [DISCOVERY_DOC] });
+    gapiInited = true;
+    maybeInit();
+  });
+}
+
+function gisLoaded() {
+  // We'll use implicit flow — no backend needed
+  gisInited = true;
+  maybeInit();
+}
+
+function maybeInit() {
+  if (gapiInited && gisInited) {
+    checkAuth();
+  }
+}
+
+function checkAuth() {
+  // Try to get token from sessionStorage first
+  const savedToken = sessionStorage.getItem('td_token');
+  if (savedToken) {
+    gapi.client.setToken({ access_token: savedToken });
+    onSignedIn();
+  } else {
+    requestAuth();
+  }
+}
+
+function requestAuth() {
+  setLoading('Accesso a Google richiesto...');
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: getClientId(),
+    scope: SCOPES,
+    callback: (resp) => {
+      if (resp.error) { showAuthError(); return; }
+      sessionStorage.setItem('td_token', resp.access_token);
+      onSignedIn();
+    },
+  });
+  tokenClient.requestAccessToken({ prompt: 'consent' });
+}
+
+function getClientId() {
+  // The CLIENT_ID is stored in localStorage so user only enters it once
+  let cid = localStorage.getItem('td_client_id');
+  if (!cid) {
+    cid = prompt('Inserisci il tuo Google OAuth Client ID\n(dalla Google Cloud Console — necessario una volta sola):') || '';
+    if (cid) localStorage.setItem('td_client_id', cid);
+  }
+  return cid;
+}
+
+async function onSignedIn() {
+  setSyncStatus('syncing', 'Sincronizzazione...');
+  setLoading('Caricamento dati...');
+  await ensureSheets();
+  await syncAll();
+  hideLoading();
+}
+
+function showAuthError() {
+  document.getElementById('loading-text').textContent = 'Accesso negato. Ricarica la pagina e riprova.';
+  setSyncStatus('error', 'Errore accesso');
+}
+
+// ─── SHEETS SETUP ─────────────────────────────────────────────────────────────
+async function ensureSheets() {
+  try {
+    const res = await gapi.client.sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
+    const sheets = res.result.sheets.map(s => s.properties.title);
+    const requests = [];
+    if (!sheets.includes('Interventi')) requests.push({ addSheet: { properties: { title: 'Interventi' } } });
+    if (!sheets.includes('Clienti')) requests.push({ addSheet: { properties: { title: 'Clienti' } } });
+    if (requests.length) {
+      await gapi.client.sheets.spreadsheets.batchUpdate({ spreadsheetId: SHEET_ID, resource: { requests } });
+    }
+    // Write headers if sheet is empty
+    await writeHeadersIfEmpty();
+  } catch(e) { console.error('ensureSheets error', e); }
+}
+
+async function writeHeadersIfEmpty() {
+  const intHeaders = [['ID','Titolo','Cliente','Stato','Priorità','Data','Orario','Indirizzo','Descrizione','Note']];
+  const cliHeaders = [['ID','Nome','Referente','Telefono','Email','Città','Note']];
+  try {
+    const r1 = await gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Interventi!A1' });
+    if (!r1.result.values) await writeRange('Interventi!A1', intHeaders);
+    const r2 = await gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Clienti!A1' });
+    if (!r2.result.values) await writeRange('Clienti!A1', cliHeaders);
+  } catch(e) { console.error(e); }
+}
+
+// ─── SYNC ─────────────────────────────────────────────────────────────────────
+async function syncAll() {
+  setSyncStatus('syncing', 'Sincronizzazione...');
+  try {
+    const [r1, r2] = await Promise.all([
+      gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Interventi!A2:J' }),
+      gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Clienti!A2:G' }),
+    ]);
+    interventi = (r1.result.values || []).map(r => ({
+      id: r[0]||'', titolo: r[1]||'', cliente: r[2]||'', stato: r[3]||'aperto',
+      priorita: r[4]||'media', data: r[5]||'', orario: r[6]||'',
+      indirizzo: r[7]||'', descrizione: r[8]||'', note: r[9]||''
+    })).filter(i => i.id);
+    clienti = (r2.result.values || []).map(r => ({
+      id: r[0]||'', nome: r[1]||'', ref: r[2]||'', tel: r[3]||'',
+      email: r[4]||'', citta: r[5]||'', note: r[6]||''
+    })).filter(c => c.id);
+    renderAll();
+    setSyncStatus('ok', 'Sincronizzato');
+  } catch(e) {
+    setSyncStatus('error', 'Errore sync');
+    showToast('Errore di sincronizzazione', 'error');
+    console.error(e);
+  }
+}
+
+// ─── SHEETS WRITE ─────────────────────────────────────────────────────────────
+async function writeRange(range, values) {
+  return gapi.client.sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID, range, valueInputOption: 'RAW',
+    resource: { values }
+  });
+}
+
+async function appendRow(sheet, values) {
+  return gapi.client.sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID, range: sheet + '!A1',
+    valueInputOption: 'RAW', insertDataOption: 'INSERT_ROWS',
+    resource: { values: [values] }
+  });
+}
+
+async function findRowIndex(sheet, id) {
+  const col = sheet === 'Interventi' ? 'J' : 'G';
+  const r = await gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: sheet + '!A:A' });
+  const rows = r.result.values || [];
+  for (let i = 1; i < rows.length; i++) if (rows[i][0] === id) return i + 1;
+  return -1;
+}
+
+async function updateRow(sheet, id, values) {
+  const row = await findRowIndex(sheet, id);
+  if (row < 0) return;
+  const cols = sheet === 'Interventi' ? 'J' : 'G';
+  await writeRange(`${sheet}!A${row}:${cols}${row}`, [values]);
+}
+
+async function deleteRow(sheet, id) {
+  const row = await findRowIndex(sheet, id);
+  if (row < 0) return;
+  const sheetMeta = await gapi.client.sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
+  const sheetObj = sheetMeta.result.sheets.find(s => s.properties.title === sheet);
+  await gapi.client.sheets.spreadsheets.batchUpdate({
+    spreadsheetId: SHEET_ID,
+    resource: { requests: [{ deleteDimension: { range: { sheetId: sheetObj.properties.sheetId, dimension: 'ROWS', startIndex: row - 1, endIndex: row } } }] }
+  });
+}
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+function genId(prefix) { return prefix + Date.now().toString(36).toUpperCase(); }
+function getClientName(id) { const c = clienti.find(x => x.id === id); return c ? c.nome : id||'—'; }
+
+function badgeHTML(stato) {
+  const map = { 'aperto':['badge-aperto','Aperto'], 'in-corso':['badge-progress','In Corso'], 'chiuso':['badge-chiuso','Chiuso'], 'in-attesa':['badge-attesa','In Attesa'] };
+  const [cls, label] = map[stato] || ['','—'];
+  return `<span class="badge ${cls}"><span class="badge-dot"></span>${label}</span>`;
+}
+function priorityHTML(p) { return `<span class="priority priority-${p}">${p.charAt(0).toUpperCase()+p.slice(1)}</span>`; }
+
+function setSyncStatus(state, label) {
+  const dot = document.getElementById('sync-dot');
+  dot.className = 'sync-dot ' + state;
+  document.getElementById('sync-label').textContent = label;
+}
+function setLoading(msg) { document.getElementById('loading-text').textContent = msg; document.getElementById('loading-overlay').style.display = 'flex'; }
+function hideLoading() { document.getElementById('loading-overlay').style.display = 'none'; }
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast'); t.textContent = msg;
+  t.className = 'toast ' + type + ' show';
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); }
+function closeSidebar() { document.getElementById('sidebar').classList.remove('open'); }
+
+// ─── NAVIGATION ───────────────────────────────────────────────────────────────
+function showPage(page) {
+  currentPage = page;
+  ['dashboard','interventi','calendario','clienti'].forEach(p => {
+    document.getElementById('page-'+p).style.display = p === page ? 'block' : 'none';
+  });
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  const idxMap = {dashboard:0,interventi:1,calendario:2,clienti:3};
+  const items = document.querySelectorAll('.nav-item');
+  if (items[idxMap[page]]) items[idxMap[page]].classList.add('active');
+  document.getElementById('page-title').textContent = {dashboard:'Dashboard',interventi:'Interventi',calendario:'Calendario',clienti:'Clienti'}[page];
+  const btn = document.getElementById('main-action-btn');
+  if (page === 'clienti') { btn.textContent = '+ Nuovo Cliente'; btn.onclick = openNewCliente; }
+  else { btn.textContent = '+ Nuovo Intervento'; btn.onclick = openNewIntervento; }
+  if (page === 'calendario') renderCalendar();
+  if (page === 'clienti') renderClienti();
+  if (page === 'dashboard') renderDashboard();
+  closeSidebar();
+}
+
+// ─── RENDER ───────────────────────────────────────────────────────────────────
+function renderAll() { renderDashboard(); renderTable(); if (currentPage==='clienti') renderClienti(); if (currentPage==='calendario') renderCalendar(); }
+
+function renderDashboard() {
+  document.getElementById('stat-total').textContent = interventi.length;
+  document.getElementById('stat-progress').textContent = interventi.filter(i=>i.stato==='in-corso').length;
+  document.getElementById('stat-closed').textContent = interventi.filter(i=>i.stato==='chiuso').length;
+  document.getElementById('stat-high').textContent = interventi.filter(i=>i.priorita==='alta').length;
+  const tb = document.getElementById('dash-tbody');
+  const recent = [...interventi].reverse().slice(0,8);
+  tb.innerHTML = recent.length ? recent.map(i=>`<tr onclick="openDetail('${i.id}')"><td class="td-id">#${i.id}</td><td class="td-title">${i.titolo}</td><td style="color:var(--muted);font-size:12px">${getClientName(i.cliente)}</td><td>${badgeHTML(i.stato)}</td><td>${priorityHTML(i.priorita)}</td><td style="font-family:var(--mono);font-size:12px;color:var(--muted)">${i.data||'—'}</td></tr>`).join('')
+    : `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--muted)">Nessun intervento. Creane uno!</td></tr>`;
+}
+
+function renderTable() {
+  const tb = document.getElementById('main-tbody');
+  const search = (document.getElementById('search-input')||{}).value||'';
+  let list = interventi;
+  if (currentFilter !== 'tutti') list = list.filter(i=>i.stato===currentFilter);
+  if (search) list = list.filter(i=>i.titolo.toLowerCase().includes(search.toLowerCase())||getClientName(i.cliente).toLowerCase().includes(search.toLowerCase()));
+  tb.innerHTML = list.length ? list.map(i=>`
+    <tr onclick="openDetail('${i.id}')">
+      <td class="td-id">#${i.id}</td>
+      <td><div class="td-title">${i.titolo}</div><div style="font-size:11px;color:var(--muted)">${i.indirizzo||''}</div></td>
+      <td style="color:var(--muted);font-size:12px">${getClientName(i.cliente)}</td>
+      <td>${badgeHTML(i.stato)}</td>
+      <td>${priorityHTML(i.priorita)}</td>
+      <td style="font-family:var(--mono);font-size:12px;color:var(--muted)">${i.data||'—'} ${i.orario||''}</td>
+      <td><button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openEdit('${i.id}')">✏️</button></td>
+    </tr>`).join('')
+    : `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--muted)">Nessun intervento trovato</td></tr>`;
+}
+
+function setFilter(f, el) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active'); renderTable();
+}
+
+// ─── CALENDAR ─────────────────────────────────────────────────────────────────
+const MONTHS = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+function changeMonth(d) { calMonth+=d; if(calMonth<0){calMonth=11;calYear--;}if(calMonth>11){calMonth=0;calYear++;} renderCalendar(); }
+
+function renderCalendar() {
+  document.getElementById('cal-title').textContent = `${MONTHS[calMonth]} ${calYear}`;
+  const grid = document.getElementById('cal-grid');
+  const today = new Date();
+  let startDow = new Date(calYear,calMonth,1).getDay(); startDow=startDow===0?6:startDow-1;
+  const dim = new Date(calYear,calMonth+1,0).getDate();
+  const dipm = new Date(calYear,calMonth,0).getDate();
+  const total = Math.ceil((startDow+dim)/7)*7;
+  const hasEv = (y,m,d)=>interventi.some(i=>{if(!i.data)return false;const[iy,im,id2]=i.data.split('-').map(Number);return iy===y&&(im-1)===m&&id2===d;});
+  let html='';
+  for(let c=0;c<total;c++){
+    let d,mo=calMonth,yr=calYear,other=false;
+    if(c<startDow){d=dipm-startDow+c+1;mo=calMonth-1;if(mo<0){mo=11;yr--;}other=true;}
+    else if(c>=startDow+dim){d=c-startDow-dim+1;mo=calMonth+1;if(mo>11){mo=0;yr++;}other=true;}
+    else d=c-startDow+1;
+    const isToday=!other&&d===today.getDate()&&calMonth===today.getMonth()&&calYear===today.getFullYear();
+    html+=`<div class="cal-day${other?' other-month':''}${isToday?' today':''}${hasEv(yr,mo,d)?' has-events':''}" onclick="showDayEvents(${yr},${mo},${d})">${d}</div>`;
+  }
+  grid.innerHTML=html;
+  showDayEvents(today.getFullYear(),today.getMonth(),today.getDate());
+}
+
+function showDayEvents(y,m,d) {
+  const pad=n=>String(n).padStart(2,'0');
+  const ds=`${y}-${pad(m+1)}-${pad(d)}`;
+  const evs=interventi.filter(i=>i.data===ds);
+  document.getElementById('events-list').innerHTML=
+    `<div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:12px">${d} ${MONTHS[m]} ${y} — ${evs.length} intervento/i</div>`+
+    (evs.length?evs.map(i=>`<div class="event-row" onclick="openDetail('${i.id}')"><div class="event-time">${i.orario||'--:--'}</div><div style="flex:1"><div class="event-title">${i.titolo}</div><div class="event-client">${getClientName(i.cliente)}</div></div>${badgeHTML(i.stato)}</div>`).join('')
+    :`<div style="color:var(--muted);font-size:13px">Nessun intervento in questo giorno.</div>`);
+}
+
+// ─── INTERVENTI CRUD ──────────────────────────────────────────────────────────
+function refreshClientOptions(selected) {
+  const sel=document.getElementById('f-cliente');
+  sel.innerHTML='<option value="">— Seleziona —</option>'+clienti.map(c=>`<option value="${c.id}"${c.id===selected?' selected':''}>${c.nome}</option>`).join('');
+}
+
+function openNewIntervento() {
+  editingId=null;
+  document.getElementById('modal-int-title').textContent='Nuovo Intervento';
+  ['titolo','indirizzo','descrizione','note'].forEach(f=>document.getElementById('f-'+f).value='');
+  document.getElementById('f-stato').value='aperto';
+  document.getElementById('f-priorita').value='media';
+  document.getElementById('f-data').value=new Date().toISOString().split('T')[0];
+  document.getElementById('f-orario').value='';
+  refreshClientOptions('');
+  document.getElementById('modal-intervento').classList.add('open');
+}
+
+function openEdit(id) {
+  const i=interventi.find(x=>x.id===id); if(!i) return;
+  editingId=id;
+  document.getElementById('modal-int-title').textContent='Modifica Intervento';
+  document.getElementById('f-titolo').value=i.titolo;
+  document.getElementById('f-stato').value=i.stato;
+  document.getElementById('f-priorita').value=i.priorita;
+  document.getElementById('f-data').value=i.data||'';
+  document.getElementById('f-orario').value=i.orario||'';
+  document.getElementById('f-indirizzo').value=i.indirizzo||'';
+  document.getElementById('f-descrizione').value=i.descrizione||'';
+  document.getElementById('f-note').value=i.note||'';
+  refreshClientOptions(i.cliente);
+  document.getElementById('modal-intervento').classList.add('open');
+}
+
+async function saveIntervento() {
+  const titolo=document.getElementById('f-titolo').value.trim();
+  if(!titolo){alert('Inserisci un titolo');return;}
+  const btn=document.getElementById('btn-save-int'); btn.disabled=true; btn.textContent='Salvataggio...';
+  setSyncStatus('syncing','Salvataggio...');
+  const row=[
+    editingId||genId('I'),
+    titolo,
+    document.getElementById('f-cliente').value,
+    document.getElementById('f-stato').value,
+    document.getElementById('f-priorita').value,
+    document.getElementById('f-data').value,
+    document.getElementById('f-orario').value,
+    document.getElementById('f-indirizzo').value,
+    document.getElementById('f-descrizione').value,
+    document.getElementById('f-note').value,
+  ];
+  try {
+    if (editingId) { await updateRow('Interventi', editingId, row); }
+    else { await appendRow('Interventi', row); }
+    await syncAll();
+    closeModal('modal-intervento');
+    showToast(editingId?'Intervento aggiornato ✓':'Intervento creato ✓');
+  } catch(e) { showToast('Errore durante il salvataggio','error'); setSyncStatus('error','Errore'); }
+  btn.disabled=false; btn.textContent='Salva';
+}
+
+async function deleteIntervento(id) {
+  if(!confirm('Eliminare questo intervento?')) return;
+  setSyncStatus('syncing','Eliminazione...');
+  try { await deleteRow('Interventi', id); await syncAll(); closeModal('modal-detail'); showToast('Intervento eliminato'); }
+  catch(e) { showToast('Errore eliminazione','error'); }
+}
+
+function openDetail(id) {
+  const i=interventi.find(x=>x.id===id); if(!i) return;
+  document.getElementById('det-titolo').textContent=i.titolo;
+  document.getElementById('det-id').textContent='#'+i.id;
+  document.getElementById('detail-body').innerHTML=`
+    <div class="detail-item"><div class="detail-key">Stato</div><div class="detail-val">${badgeHTML(i.stato)}</div></div>
+    <div class="detail-item"><div class="detail-key">Priorità</div><div class="detail-val">${priorityHTML(i.priorita)}</div></div>
+    <div class="detail-item"><div class="detail-key">Cliente</div><div class="detail-val">${getClientName(i.cliente)}</div></div>
+    <div class="detail-item"><div class="detail-key">Data / Orario</div><div class="detail-val">${i.data||'—'} ${i.orario||''}</div></div>
+    <div class="detail-item full"><div class="detail-key">Indirizzo</div><div class="detail-val">${i.indirizzo||'—'}</div></div>
+    <div class="detail-item full"><div class="detail-key">Descrizione</div><div class="detail-val">${i.descrizione||'—'}</div></div>
+    <div class="detail-item full"><div class="detail-key">Note</div><div class="detail-val">${i.note||'—'}</div></div>`;
+  document.getElementById('det-edit-btn').onclick=()=>{closeModal('modal-detail');openEdit(id);};
+  document.getElementById('det-delete-btn').onclick=()=>deleteIntervento(id);
+  document.getElementById('modal-detail').classList.add('open');
+}
+
+// ─── CLIENTI CRUD ─────────────────────────────────────────────────────────────
+function renderClienti() {
+  const grid=document.getElementById('client-grid');
+  if(!clienti.length){grid.innerHTML=`<div style="color:var(--muted);padding:40px;text-align:center">Nessun cliente. Aggiungine uno!</div>`;return;}
+  grid.innerHTML=clienti.map(c=>{
+    const n=interventi.filter(i=>i.cliente===c.id).length;
+    return `<div class="client-card" onclick="openClientDetail('${c.id}')">
+      <div class="client-name">${c.nome}</div>
+      <div class="client-meta">${c.ref?`👤 ${c.ref}<br>`:''}${c.tel?`📞 ${c.tel}<br>`:''}${c.email?`✉️ ${c.email}<br>`:''}${c.citta?`📍 ${c.citta}`:''}</div>
+      <div class="client-badge">🔧 ${n} intervento${n!==1?'i':''}</div>
+    </div>`;
+  }).join('');
+}
+
+function openNewCliente() {
+  editingClienteId=null;
+  document.getElementById('modal-cli-title').textContent='Nuovo Cliente';
+  ['nome','ref','tel','email','citta','note'].forEach(f=>document.getElementById('c-'+f).value='');
+  document.getElementById('modal-cliente').classList.add('open');
+}
+
+function openClientDetail(id) {
+  const c=clienti.find(x=>x.id===id); if(!c) return;
+  editingClienteId=id;
+  document.getElementById('modal-cli-title').textContent='Modifica Cliente';
+  document.getElementById('c-nome').value=c.nome;
+  document.getElementById('c-ref').value=c.ref||'';
+  document.getElementById('c-tel').value=c.tel||'';
+  document.getElementById('c-email').value=c.email||'';
+  document.getElementById('c-citta').value=c.citta||'';
+  document.getElementById('c-note').value=c.note||'';
+  document.getElementById('modal-cliente').classList.add('open');
+}
+
+async function saveCliente() {
+  const nome=document.getElementById('c-nome').value.trim();
+  if(!nome){alert('Inserisci la ragione sociale');return;}
+  const btn=document.getElementById('btn-save-cli'); btn.disabled=true; btn.textContent='Salvataggio...';
+  setSyncStatus('syncing','Salvataggio...');
+  const row=[
+    editingClienteId||genId('C'),
+    nome,
+    document.getElementById('c-ref').value,
+    document.getElementById('c-tel').value,
+    document.getElementById('c-email').value,
+    document.getElementById('c-citta').value,
+    document.getElementById('c-note').value,
+  ];
+  try {
+    if(editingClienteId){await updateRow('Clienti',editingClienteId,row);}
+    else{await appendRow('Clienti',row);}
+    await syncAll();
+    closeModal('modal-cliente');
+    showToast(editingClienteId?'Cliente aggiornato ✓':'Cliente aggiunto ✓');
+  } catch(e){showToast('Errore salvataggio','error');setSyncStatus('error','Errore');}
+  btn.disabled=false; btn.textContent='Salva';
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+window.onload = () => {
+  const now=new Date(); calYear=now.getFullYear(); calMonth=now.getMonth();
+  document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');}));
+};
+</script>
+
+<!-- Google APIs -->
+<script src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
+<script src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
+</body>
+</html>
