@@ -590,7 +590,7 @@ function updateYearFilterOptions() {
 function renderAll() { renderDashboard(); renderTable(); renderFatture(); if(currentPage==='clienti')renderClienti(); if(currentPage==='calendario')renderCalendar(); updateYearFilterOptions(); }
 
 function renderDashboard() {
-  document.getElementById('stat-total').textContent=interventi.filter(i=>i.stato==='aperto'||i.stato==='in-corso'||i.stato==='attesa-ordine').length;
+  document.getElementById('stat-total').textContent=interventi.filter(i=>i.stato==='aperto'||i.stato==='in-corso').length;
   document.getElementById('stat-progress').textContent=interventi.filter(i=>i.stato==='in-corso').length;
   document.getElementById('stat-closed').textContent=interventi.filter(i=>i.stato==='attesa-ordine').length;
   document.getElementById('stat-toinvoice').textContent=interventi.filter(i=>i.stato_fattura==='emettere').length;
