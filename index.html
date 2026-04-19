@@ -549,6 +549,24 @@ async function syncAll() {
 
 function safeJSON(str, fallback) { try { return str ? JSON.parse(str) : fallback; } catch { return fallback; } }
 
+// Converte yyyy-mm-dd → dd/mm/yyyy per la visualizzazione
+function fmtDataIT(iso) {
+  if (!iso) return '';
+  const p = iso.split('-');
+  if (p.length !== 3) return iso;
+  return p[2] + '/' + p[1] + '/' + p[0];
+}
+// Converte dd/mm/yyyy → yyyy-mm-dd per i campi input[type=date]
+function fmtDataISO(it) {
+  if (!it) return '';
+  // già ISO
+  if (/^\d{4}-\d{2}-\d{2}$/.test(it)) return it;
+  // dd/mm/yyyy
+  const p = it.split('/');
+  if (p.length === 3) return p[2] + '-' + p[1].padStart(2,'0') + '-' + p[0].padStart(2,'0');
+  return it;
+}
+
 // ─── SHEETS WRITE ─────────────────────────────────────────────────────────────
 async function writeRange(range, values) {
   return gapi.client.sheets.spreadsheets.values.update({
@@ -609,13 +627,14 @@ function calcolaOreTotaliMulti() {
   document.getElementById('f_ore_totali').value=tot.toFixed(2);
   return tot;
 }
-function addHourEntry(dalle='',alle='',pausa='0') { oreEntries.push({id:Date.now()+Math.random(),dalle,alle,pausa}); renderHoursList(); }
+function addHourEntry(dalle='',alle='',pausa='0',data='') { oreEntries.push({id:Date.now()+Math.random(),dalle,alle,pausa,data}); renderHoursList(); }
 function removeHourEntry(id) { oreEntries=oreEntries.filter(e=>e.id!==id); renderHoursList(); }
 function updateHourEntry(id,field,value) { const e=oreEntries.find(e=>e.id===id); if(e){e[field]=value;calcolaOreTotaliMulti();} }
 function renderHoursList() {
   const c=document.getElementById('hours-list');
   if (!oreEntries.length) { c.innerHTML='<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">Nessuna fascia oraria.</div>'; calcolaOreTotaliMulti(); return; }
   c.innerHTML=oreEntries.map(e=>`<div class="hours-entry">
+    <div class="form-group"><label style="font-size:10px">Data</label><input type="date" class="form-control" value="${e.data||''}" onchange="updateHourEntry(${e.id},'data',this.value)"></div>
     <div class="form-group"><label style="font-size:10px">Dalle</label><input type="time" class="form-control" value="${e.dalle}" onchange="updateHourEntry(${e.id},'dalle',this.value)"></div>
     <div class="form-group"><label style="font-size:10px">Alle</label><input type="time" class="form-control" value="${e.alle}" onchange="updateHourEntry(${e.id},'alle',this.value)"></div>
     <div class="form-group"><label style="font-size:10px">Pausa (min)</label><input type="number" step="5" class="form-control" value="${e.pausa}" onchange="updateHourEntry(${e.id},'pausa',this.value)"></div>
@@ -838,7 +857,7 @@ async function saveIntervento() {
     importo:document.getElementById('f_importo').value,
     stato_fattura:statoFatt,
     ore_totali:document.getElementById('f_ore_totali').value||'0',
-    ore_entries:oreEntries.map(e=>({dalle:e.dalle,alle:e.alle,pausa:e.pausa}))
+    ore_entries:oreEntries.map(e=>({data:e.data||'',dalle:e.dalle,alle:e.alle,pausa:e.pausa}))
   };
 
   try {
@@ -856,7 +875,7 @@ async function saveIntervento() {
 
 function openDetail(id) {
   const i=interventi.find(x=>x.id===id); if(!i) return;
-  let oreHtml=(i.ore_entries&&i.ore_entries.length)?i.ore_entries.map(e=>`${e.dalle||'—'} → ${e.alle||'—'} (pausa ${e.pausa||0} min)`).join('<br>')+`<br><strong>Totale: ${formatOre(parseFloat(i.ore_totali||0))}</strong>`:`<strong>${formatOre(parseFloat(i.ore_totali||0))}</strong>`;
+  let oreHtml=(i.ore_entries&&i.ore_entries.length)?i.ore_entries.map(e=>`<span style='color:var(--accent);font-weight:700'>${e.data?fmtDataIT(e.data):''}</span> ${e.dalle||'—'} → ${e.alle||'—'} (pausa ${e.pausa||0} min)`).join('<br>')+`<br><strong>Totale: ${formatOre(parseFloat(i.ore_totali||0))}</strong>`:`<strong>${formatOre(parseFloat(i.ore_totali||0))}</strong>`;
   document.getElementById('det_titolo').textContent=i.titolo;
   document.getElementById('det_id').textContent='#'+i.id;
   document.getElementById('detail_body').innerHTML=`
@@ -992,12 +1011,12 @@ function exportToExcel() {
     } else ore = formatOre(parseFloat(i.ore_totali||0));
     return {
       'ID': i.id, 'Titolo': i.titolo, 'Cliente': getClientName(i.cliente),
-      'Stato Intervento': i.stato, 'Data Intervento': i.data||'',
+      'Stato Intervento': i.stato, 'Data Intervento': fmtDataIT(i.data)||'',
       'Indirizzo': i.indirizzo||'', 'Ore Lavoro': ore,
-      'Rapportino N.': i.rapportino_num||'', 'Rapportino Data': i.rapportino_data||'',
+      'Rapportino N.': i.rapportino_num||'', 'Rapportino Data': fmtDataIT(i.rapportino_data)||'',
       'Offerta N.': i.offerta_num||'', 'Ordine Cliente N.': i.ordine_num||'',
-      'Ordine Data': i.ordine_data||'', 'Fattura N.': i.fattura_num||'',
-      'Data Fattura': i.fattura_data||'', 'Importo (€)': i.importo||'',
+      'Ordine Data': fmtDataIT(i.ordine_data)||'', 'Fattura N.': i.fattura_num||'',
+      'Data Fattura': fmtDataIT(i.fattura_data)||'', 'Importo (€)': i.importo||'',
       'Stato Fattura': i.stato_fattura||'', 'Descrizione': i.descrizione||''
     };
   });
@@ -1041,7 +1060,7 @@ function importFromCSV(input) {
           if (ce) clienteId=ce.id;
           else { clienteId=genId('C'); clienti.push({id:clienteId,nome:row.Cliente,ref:'',tel:'',email:'',citta:''}); await appendRow('Clienti',clienteToRow(clienteId,{nome:row.Cliente,ref:'',tel:'',email:'',citta:''})); }
         }
-        const d={titolo:row.Titolo,cliente:clienteId,stato:row['Stato Intervento']||'aperto',data:row['Data Intervento']||'',indirizzo:row.Indirizzo||'',descrizione:row.Descrizione||'',ore_entries:[],ore_totali:'0',rapportino_num:row['Rapportino N.']||'',rapportino_data:row['Rapportino Data']||'',offerta_num:row['Offerta N.']||'',ordine_num:row['Ordine Cliente N.']||'',ordine_data:row['Ordine Data']||'',fattura_num:row['Fattura N.']||'',fattura_data:row['Data Fattura']||'',importo:row['Importo (€)']||'',stato_fattura:row['Stato Fattura']||'',files:[]};
+        const d={titolo:row.Titolo,cliente:clienteId,stato:row['Stato Intervento']||'aperto',data:fmtDataISO(row['Data Intervento']||''),indirizzo:row.Indirizzo||'',descrizione:row.Descrizione||'',ore_entries:[],ore_totali:'0',rapportino_num:row['Rapportino N.']||'',rapportino_data:fmtDataISO(row['Rapportino Data']||''),offerta_num:row['Offerta N.']||'',ordine_num:row['Ordine Cliente N.']||'',ordine_data:fmtDataISO(row['Ordine Data']||''),fattura_num:row['Fattura N.']||'',fattura_data:fmtDataISO(row['Data Fattura']||''),importo:row['Importo (€)']||'',stato_fattura:row['Stato Fattura']||'',files:[]};
         nuovi.push({id,d});
         importati++;
       }
