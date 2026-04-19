@@ -175,17 +175,20 @@
         <button class="btn btn-secondary btn-sm" onclick="syncAll()">↻ Sync</button>
         <button class="btn btn-success btn-sm" onclick="exportBackup()">💾 Backup JSON</button>
         <button class="btn btn-warning btn-sm" onclick="document.getElementById('import-file').click()">📂 Importa JSON</button>
+        <button class="btn btn-success btn-sm" onclick="exportToExcel()">📊 Esporta Excel</button>
+        <button class="btn btn-warning btn-sm" onclick="document.getElementById('import-csv-file').click()">📂 Importa CSV</button>
         <button class="btn btn-primary" id="main-action-btn">+ Nuovo Intervento</button>
         <input type="file" id="import-file" accept=".json" style="display:none" onchange="importBackup(this)">
+        <input type="file" id="import-csv-file" accept=".csv" style="display:none" onchange="importFromCSV(this)">
       </div>
     </div>
 
     <!-- DASHBOARD -->
     <div class="content" id="page-dashboard">
       <div class="stats-grid">
-        <div class="stat-card yellow"><div class="stat-label">Totale Interventi</div><div class="stat-value" id="stat-total">—</div></div>
+        <div class="stat-card yellow"><div class="stat-label">Attività Aperte</div><div class="stat-value" id="stat-total">—</div></div>
         <div class="stat-card teal"><div class="stat-label">In Corso</div><div class="stat-value" id="stat-progress">—</div></div>
-        <div class="stat-card green"><div class="stat-label">Chiusi</div><div class="stat-value" id="stat-closed">—</div></div>
+        <div class="stat-card green"><div class="stat-label">Attesa Ordine</div><div class="stat-value" id="stat-closed">—</div></div>
         <div class="stat-card red"><div class="stat-label">Da Fatturare</div><div class="stat-value" id="stat-toinvoice">—</div></div>
       </div>
       <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:14px">Interventi Aperti / In Corso</div>
@@ -587,9 +590,9 @@ function updateYearFilterOptions() {
 function renderAll() { renderDashboard(); renderTable(); renderFatture(); if(currentPage==='clienti')renderClienti(); if(currentPage==='calendario')renderCalendar(); updateYearFilterOptions(); }
 
 function renderDashboard() {
-  document.getElementById('stat-total').textContent=interventi.length;
+  document.getElementById('stat-total').textContent=interventi.filter(i=>i.stato==='aperto'||i.stato==='in-corso'||i.stato==='attesa-ordine').length;
   document.getElementById('stat-progress').textContent=interventi.filter(i=>i.stato==='in-corso').length;
-  document.getElementById('stat-closed').textContent=interventi.filter(i=>i.stato==='chiuso').length;
+  document.getElementById('stat-closed').textContent=interventi.filter(i=>i.stato==='attesa-ordine').length;
   document.getElementById('stat-toinvoice').textContent=interventi.filter(i=>i.stato_fattura==='emettere').length;
   const rec=interventi.filter(i=>i.stato==='aperto'||i.stato==='in-corso').sort((a,b)=>new Date(b.data)-new Date(a.data)).slice(0,5);
   document.getElementById('dash-tbody').innerHTML=rec.length
@@ -879,6 +882,77 @@ async function deleteCliente(id) {
   setSyncStatus('syncing','Eliminazione...');
   try{await deleteSheetRow('Clienti',id);await syncAll();closeModal('modal-detail');showToast('Cliente eliminato');}
   catch(e){showToast('Errore eliminazione','error');}
+}
+
+// ─── EXCEL EXPORT ─────────────────────────────────────────────────────────────
+function exportToExcel() {
+  const rows = interventi.map(i => {
+    let ore = '';
+    if (i.ore_entries && i.ore_entries.length) {
+      ore = i.ore_entries.map(e => `${e.dalle||'--:--'} → ${e.alle||'--:--'} (pausa ${e.pausa||0} min)`).join('; ');
+      ore += ` | Totale: ${formatOre(parseFloat(i.ore_totali||0))}`;
+    } else ore = formatOre(parseFloat(i.ore_totali||0));
+    return {
+      'ID': i.id, 'Titolo': i.titolo, 'Cliente': getClientName(i.cliente),
+      'Stato Intervento': i.stato, 'Data Intervento': i.data||'',
+      'Indirizzo': i.indirizzo||'', 'Ore Lavoro': ore,
+      'Rapportino N.': i.rapportino_num||'', 'Rapportino Data': i.rapportino_data||'',
+      'Offerta N.': i.offerta_num||'', 'Ordine Cliente N.': i.ordine_num||'',
+      'Ordine Data': i.ordine_data||'', 'Fattura N.': i.fattura_num||'',
+      'Data Fattura': i.fattura_data||'', 'Importo (€)': i.importo||'',
+      'Stato Fattura': i.stato_fattura||'', 'Descrizione': i.descrizione||''
+    };
+  });
+  if (!rows.length) { showToast('Nessun dato da esportare', 'error'); return; }
+  const headers = Object.keys(rows[0]);
+  const csv = [headers.join(';'), ...rows.map(r => headers.map(h => `"${String(r[h]||'').replace(/;/g,',').replace(/\n/g,' ')}"`).join(';'))].join('\n');
+  const blob = new Blob(["\uFEFF"+csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob), a = document.createElement('a');
+  a.href=url; a.download=`tekno_interventi_${new Date().toISOString().split('T')[0]}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  showToast('Excel esportato!');
+}
+
+// ─── CSV IMPORT ───────────────────────────────────────────────────────────────
+function importFromCSV(input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    try {
+      const lines = e.target.result.split('\n');
+      const headers = lines[0].split(';').map(h => h.replace(/"/g,'').trim());
+      let importati = 0, saltati = 0;
+      const nuovi = [];
+      for (let i = 1; i < lines.length; i++) {
+        if (!lines[i].trim()) continue;
+        const values = []; let inQ=false, cur='';
+        for (const ch of lines[i]) {
+          if (ch==='"') inQ=!inQ;
+          else if (ch===';'&&!inQ) { values.push(cur); cur=''; }
+          else cur+=ch;
+        }
+        values.push(cur);
+        const row = {};
+        headers.forEach((h,idx) => { row[h]=(values[idx]||'').replace(/^"|"$/g,'').trim(); });
+        if (!row.Titolo) { saltati++; continue; }
+        const id = row.ID || genId('I');
+        if (interventi.find(x=>x.id===id)) { saltati++; continue; }
+        let clienteId='';
+        if (row.Cliente) {
+          const ce=clienti.find(c=>c.nome===row.Cliente);
+          if (ce) clienteId=ce.id;
+          else { clienteId=genId('C'); clienti.push({id:clienteId,nome:row.Cliente,ref:'',tel:'',email:'',citta:''}); await appendRow('Clienti',clienteToRow(clienteId,{nome:row.Cliente,ref:'',tel:'',email:'',citta:''})); }
+        }
+        const d={titolo:row.Titolo,cliente:clienteId,stato:row['Stato Intervento']||'aperto',data:row['Data Intervento']||'',indirizzo:row.Indirizzo||'',descrizione:row.Descrizione||'',ore_entries:[],ore_totali:'0',rapportino_num:row['Rapportino N.']||'',rapportino_data:row['Rapportino Data']||'',offerta_num:row['Offerta N.']||'',ordine_num:row['Ordine Cliente N.']||'',ordine_data:row['Ordine Data']||'',fattura_num:row['Fattura N.']||'',fattura_data:row['Data Fattura']||'',importo:row['Importo (€)']||'',stato_fattura:row['Stato Fattura']||'',files:[]};
+        nuovi.push({id,d});
+        importati++;
+      }
+      for (const {id,d} of nuovi) await appendRow('Interventi', interventoToRow(id,d));
+      await syncAll();
+      showToast(`Importati ${importati} interventi. Saltati ${saltati}.`);
+    } catch(err) { showToast('Errore importazione CSV','error'); console.error(err); }
+  };
+  reader.readAsText(file,'UTF-8'); input.value='';
 }
 
 // ─── BACKUP ───────────────────────────────────────────────────────────────────
