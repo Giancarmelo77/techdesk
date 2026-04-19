@@ -398,12 +398,8 @@ function checkAuth() {
 
 function requestAuth() {
   setLoading('Accesso Google richiesto...');
-  let cid = localStorage.getItem('td_client_id');
-  if (!cid) {
-    cid = prompt('Inserisci il tuo Google OAuth Client ID\n(lo trovi su Google Cloud Console — serve solo la prima volta):') || '';
-    if (cid) localStorage.setItem('td_client_id', cid);
-    else { document.getElementById('loading-text').textContent = 'Client ID necessario. Ricarica la pagina.'; return; }
-  }
+  const cid = '380905986512-vspgg7f52npf283gg97cc3jnid575o7k.apps.googleusercontent.com';
+  localStorage.setItem('td_client_id', cid);
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: cid, scope: SCOPES,
     callback: (resp) => {
