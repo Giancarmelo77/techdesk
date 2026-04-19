@@ -210,7 +210,7 @@
         <button class="filter-btn" data-filter="chiuso">Chiusi</button>
       </div>
       <div class="table-wrap"><table>
-        <thead><tr><th>ID</th><th>Titolo</th><th>Cliente</th><th>Stato</th><th>Ore</th><th>Data</th><th>Fattura</th><th></th></tr></thead>
+        <thead><tr><th>N. Offerta</th><th>Titolo</th><th>Cliente</th><th>Stato</th><th>Ore</th><th>Data</th><th>Fattura</th><th></th></tr></thead>
         <tbody id="main-tbody"></tbody>
       </table></div>
     </div>
@@ -227,7 +227,7 @@
         <button class="filter-btn" data-fattura-filter="pagata">Pagata</button>
       </div>
       <div class="table-wrap"><table>
-        <thead><tr><th>ID</th><th>Titolo</th><th>Cliente</th><th>Data</th><th>Importo</th><th>Stato Fattura</th><th>Fattura N.</th><th></th></tr></thead>
+        <thead><tr><th>N. Offerta</th><th>Titolo</th><th>Cliente</th><th>Data</th><th>Importo</th><th>Stato Fattura</th><th>Fattura N.</th><th></th></tr></thead>
         <tbody id="fatture-tbody"></tbody>
       </table></div>
     </div>
@@ -602,7 +602,7 @@ function renderTable() {
   const anno=document.getElementById('interventi-year-filter')?.value||'tutti';
   const list=interventi.filter(i=>(currentFilter==='tutti'||i.stato===currentFilter)&&(anno==='tutti'||(i.data&&i.data.split('-')[0]===anno))&&(!search||i.titolo.toLowerCase().includes(search)||getClientName(i.cliente).toLowerCase().includes(search)));
   document.getElementById('main-tbody').innerHTML=list.length
-    ?list.map(i=>`<tr onclick="openDetail('${i.id}')"><td class="td-id">#${i.id}</td><td><strong>${i.titolo}</strong><br><small style="color:var(--muted)">${i.indirizzo||''}</small></td><td>${getClientName(i.cliente)}</td><td>${statoInterventoBadge(i.stato)}</td><td>${formatOre(parseFloat(i.ore_totali||0))}</td><td>${i.data||'—'}</td><td>${statoFatturaBadge(i.stato_fattura)}</td><td><button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openEditIntervento('${i.id}')">✏️</button></td></tr>`).join('')
+    ?list.map(i=>`<tr onclick="openDetail('${i.id}')"><td>${i.offerta_num||'—'}</td><td><strong>${i.titolo}</strong><br><small style="color:var(--muted)">${i.indirizzo||''}</small></td><td>${getClientName(i.cliente)}</td><td>${statoInterventoBadge(i.stato)}</td><td>${formatOre(parseFloat(i.ore_totali||0))}</td><td>${i.data||'—'}</td><td>${statoFatturaBadge(i.stato_fattura)}</td><td><button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openEditIntervento('${i.id}')">✏️</button></td></tr>`).join('')
     :'<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--muted)">Nessun intervento trovato</td></tr>';
 }
 
@@ -611,7 +611,7 @@ function renderFatture() {
   const anno=document.getElementById('fatture-year-filter')?.value||'tutti';
   const list=interventi.filter(i=>(currentFatturaFilter==='tutti'||i.stato_fattura===currentFatturaFilter)&&(anno==='tutti'||(i.data&&i.data.split('-')[0]===anno))&&(!search||getClientName(i.cliente).toLowerCase().includes(search)||i.titolo.toLowerCase().includes(search)));
   document.getElementById('fatture-tbody').innerHTML=list.length
-    ?list.map(i=>`<tr onclick="openDetail('${i.id}')"><td class="td-id">#${i.id}</td><td><strong>${i.titolo}</strong></td><td>${getClientName(i.cliente)}</td><td>${i.data||'—'}</td><td>€ ${parseFloat(i.importo||0).toFixed(2)}</td><td>${statoFatturaBadge(i.stato_fattura)}</td><td>${i.fattura_num||'—'}</td><td><button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openEditIntervento('${i.id}')">✏️</button></td></tr>`).join('')
+    ?list.map(i=>`<tr onclick="openDetail('${i.id}')"><td>${i.offerta_num||'—'}</td><td><strong>${i.titolo}</strong></td><td>${getClientName(i.cliente)}</td><td>${i.data||'—'}</td><td>€ ${parseFloat(i.importo||0).toFixed(2)}</td><td>${statoFatturaBadge(i.stato_fattura)}</td><td>${i.fattura_num||'—'}</td><td><button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openEditIntervento('${i.id}')">✏️</button></td></tr>`).join('')
     :'<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--muted)">Nessuna fattura trovata</td></tr>';
 }
 
