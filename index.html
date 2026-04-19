@@ -391,7 +391,7 @@ function gisLoaded() { gisInited = true; maybeInit(); }
 function maybeInit() { if (gapiInited && gisInited) checkAuth(); }
 
 function checkAuth() {
-  const saved = sessionStorage.getItem('td_token');
+  const saved = localStorage.getItem('td_token');
   if (saved) { gapi.client.setToken({ access_token: saved }); onSignedIn(); }
   else requestAuth();
 }
@@ -408,7 +408,8 @@ function requestAuth() {
     client_id: cid, scope: SCOPES,
     callback: (resp) => {
       if (resp.error) { document.getElementById('loading-text').textContent = 'Accesso negato. Ricarica e riprova.'; setSyncStatus('error','Errore accesso'); return; }
-      sessionStorage.setItem('td_token', resp.access_token);
+      sessionStorage.removeItem('td_token');
+      localStorage.setItem('td_token', resp.access_token);
       onSignedIn();
     }
   });
