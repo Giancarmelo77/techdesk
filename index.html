@@ -366,10 +366,12 @@
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const SHEET_ID = '1hqDCUSFaDBwyPnP3d_dFUBsHNrnC3LZNdyFKz2FAEn4';
 const DISCOVERY_DOC = 'https://sheets.googleapis.com/$discovery/rest?version=v4';
-const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
+const SCOPES = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
+const DRIVE_FOLDER_NAME = 'TeknoAutomazione - Allegati';
+let driveFolderId = null;
 
 // Colonne Google Sheets
-// INTERVENTI: ID | Titolo | Cliente | Stato | Data | Indirizzo | Descrizione | OreEntries(JSON) | OreTotali | RapportinoNum | RapportinoData | OffertaNum | OrdineNum | OrdineData | FatturaNum | FatturaData | Importo | StatoFattura | Files(JSON)
+// INTERVENTI: ID | Titolo | Cliente | Stato | Data | Indirizzo | Descrizione | OreEntries(JSON) | OreTotali | RapportinoNum | RapportinoData | OffertaNum | OrdineNum | OrdineData | FatturaNum | FatturaData | Importo | StatoFattura | Files(JSON con url Drive)
 // CLIENTI: ID | Nome | Referente | Telefono | Email | Città
 
 // ─── STATE ────────────────────────────────────────────────────────────────────
@@ -392,8 +394,9 @@ function maybeInit() { if (gapiInited && gisInited) checkAuth(); }
 
 function checkAuth() {
   const saved = localStorage.getItem('td_token');
-  if (saved) { gapi.client.setToken({ access_token: saved }); onSignedIn(); }
-  else requestAuth();
+  const scopeOk = localStorage.getItem('td_scope_v2');
+  if (saved && scopeOk) { gapi.client.setToken({ access_token: saved }); onSignedIn(); }
+  else { localStorage.removeItem('td_token'); requestAuth(); }
 }
 
 function requestAuth() {
@@ -406,6 +409,7 @@ function requestAuth() {
       if (resp.error) { document.getElementById('loading-text').textContent = 'Accesso negato. Ricarica e riprova.'; setSyncStatus('error','Errore accesso'); return; }
       sessionStorage.removeItem('td_token');
       localStorage.setItem('td_token', resp.access_token);
+      localStorage.setItem('td_scope_v2', '1');
       onSignedIn();
     }
   });
@@ -416,9 +420,77 @@ async function onSignedIn() {
   setSyncStatus('syncing', 'Connessione...');
   setLoading('Configurazione foglio...');
   await ensureSheets();
+  setLoading('Configurazione cartella Drive...');
+  await ensureDriveFolder();
   setLoading('Caricamento dati...');
   await syncAll();
   hideLoading();
+}
+
+// ─── GOOGLE DRIVE ─────────────────────────────────────────────────────────────
+async function ensureDriveFolder() {
+  try {
+    // cerca cartella esistente
+    const saved = localStorage.getItem('td_drive_folder');
+    if (saved) { driveFolderId = saved; return; }
+    const res = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=name='${DRIVE_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)`,
+      { headers: { Authorization: 'Bearer ' + gapi.client.getToken().access_token } }
+    );
+    const data = await res.json();
+    if (data.files && data.files.length > 0) {
+      driveFolderId = data.files[0].id;
+    } else {
+      // crea cartella
+      const cr = await fetch('https://www.googleapis.com/drive/v3/files', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + gapi.client.getToken().access_token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: DRIVE_FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' })
+      });
+      const folder = await cr.json();
+      driveFolderId = folder.id;
+    }
+    localStorage.setItem('td_drive_folder', driveFolderId);
+  } catch(e) { console.error('ensureDriveFolder', e); }
+}
+
+async function uploadFileToDrive(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const token = gapi.client.getToken().access_token;
+        const metadata = { name: file.name, parents: driveFolderId ? [driveFolderId] : [] };
+        const base64 = e.target.result.split(',')[1];
+        // multipart upload
+        const boundary = '-------TeknoUpload';
+        const body = `--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: ${file.type}\r\nContent-Transfer-Encoding: base64\r\n\r\n${base64}\r\n--${boundary}--`;
+        const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,webContentLink', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + token, 'Content-Type': `multipart/related; boundary=${boundary}` },
+          body
+        });
+        const data = await res.json();
+        // rendi il file accessibile pubblicamente in lettura
+        await fetch(`https://www.googleapis.com/drive/v3/files/${data.id}/permissions`, {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ role: 'reader', type: 'anyone' })
+        });
+        resolve({ id: data.id, name: file.name, type: file.type, url: data.webViewLink, downloadUrl: `https://drive.google.com/uc?id=${data.id}` });
+      } catch(err) { reject(err); }
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function deleteFileFromDrive(fileId) {
+  try {
+    await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer ' + gapi.client.getToken().access_token }
+    });
+  } catch(e) { console.error('deleteFile', e); }
 }
 
 // ─── SHEETS SETUP ─────────────────────────────────────────────────────────────
@@ -707,10 +779,33 @@ function openEditIntervento(id) {
 }
 
 function renderFilePreview() {
-  document.getElementById('file_preview').innerHTML=pendingFiles.map((f,i)=>`<div class="file-thumb" onclick="window.open('${f.data}','_blank')">${f.type&&f.type.startsWith('image/')?`<img src="${f.data}">`:'<div class="file-icon">📄</div>'}<div class="file-name">${f.name||'File'}</div><button class="file-del" onclick="event.stopPropagation();removeFile(${i})">×</button></div>`).join('');
+  document.getElementById('file_preview').innerHTML = pendingFiles.map((f,i) => {
+    const isImg = f.type && f.type.startsWith('image/');
+    const thumb = isImg ? `<img src="${f.downloadUrl||f.data||''}">` : '<div class="file-icon">📄</div>';
+    return `<div class="file-thumb" onclick="window.open('${f.url||f.data||'#'}','_blank')">${thumb}<div class="file-name">${f.name||'File'}</div><button class="file-del" onclick="event.stopPropagation();removeFile(${i})">×</button></div>`;
+  }).join('');
 }
-function removeFile(idx){pendingFiles.splice(idx,1);renderFilePreview();}
-function addFiles(files){Array.from(files).forEach(f=>{const r=new FileReader();r.onload=e=>{pendingFiles.push({name:f.name,type:f.type,data:e.target.result});renderFilePreview();};r.readAsDataURL(f);});}
+function removeFile(idx) {
+  const f = pendingFiles[idx];
+  if (f && f.id) deleteFileFromDrive(f.id);
+  pendingFiles.splice(idx, 1);
+  renderFilePreview();
+}
+async function addFiles(files) {
+  const area = document.querySelector('.file-upload-area');
+  area.textContent = 'Caricamento in corso...';
+  for (const file of Array.from(files)) {
+    try {
+      const uploaded = await uploadFileToDrive(file);
+      pendingFiles.push(uploaded);
+      renderFilePreview();
+    } catch(e) {
+      showToast('Errore caricamento: ' + file.name, 'error');
+      console.error(e);
+    }
+  }
+  area.textContent = '📎 Clicca per allegare file';
+}
 
 async function saveIntervento() {
   const titolo=document.getElementById('f_titolo').value.trim();
@@ -786,7 +881,13 @@ function openDetail(id) {
       <div style="grid-column:1/-1"><div style="font-size:10px;color:var(--muted)">DESCRIZIONE</div><div>${i.descrizione||'—'}</div></div>
     </div>`;
   const fd=document.getElementById('det_files');
-  fd.innerHTML=i.files&&i.files.length?i.files.map(f=>`<div class="file-thumb" onclick="window.open('${f.data}','_blank')">${f.type&&f.type.startsWith('image/')?`<img src="${f.data}">`:'<div class="file-icon">📄</div>'}<div class="file-name">${f.name||'File'}</div></div>`).join(''):'<div style="color:var(--muted);font-size:12px;grid-column:1/-1;text-align:center">Nessun allegato</div>';
+  fd.innerHTML = i.files && i.files.length
+    ? i.files.map(f => {
+        const isImg = f.type && f.type.startsWith('image/');
+        const thumb = isImg ? `<img src="${f.downloadUrl||f.data||''}">` : '<div class="file-icon">📄</div>';
+        return `<div class="file-thumb" onclick="window.open('${f.url||f.data||'#'}','_blank')">${thumb}<div class="file-name">${f.name||'File'}</div></div>`;
+      }).join('')
+    : '<div style="color:var(--muted);font-size:12px;grid-column:1/-1;text-align:center">Nessun allegato</div>';
   document.getElementById('edit_intervento_btn').style.display='';
   document.getElementById('edit_intervento_btn').textContent='✏️ Modifica';
   document.getElementById('pdf_intervento_btn').style.display='';
