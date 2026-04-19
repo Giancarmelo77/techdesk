@@ -173,6 +173,7 @@
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <button class="btn btn-secondary btn-sm" onclick="syncAll()">↻ Sync</button>
+        <button class="btn btn-danger btn-sm" onclick="riconnetti()" title="Usa in caso di errore connessione">🔌 Riconnetti</button>
         <button class="btn btn-success btn-sm" onclick="exportBackup()">💾 Backup JSON</button>
         <button class="btn btn-warning btn-sm" onclick="document.getElementById('import-file').click()">📂 Importa JSON</button>
         <button class="btn btn-success btn-sm" onclick="exportToExcel()">📊 Esporta Excel</button>
@@ -391,6 +392,14 @@ function gapiLoaded() {
 }
 function gisLoaded() { gisInited = true; maybeInit(); }
 function maybeInit() { if (gapiInited && gisInited) checkAuth(); }
+
+function riconnetti() {
+  if (!confirm('Verrà richiesto di fare di nuovo il login Google. Continuare?')) return;
+  localStorage.removeItem('td_token');
+  localStorage.removeItem('td_scope_v2');
+  localStorage.removeItem('td_drive_folder');
+  location.reload();
+}
 
 function checkAuth() {
   const saved = localStorage.getItem('td_token');
