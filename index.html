@@ -382,6 +382,7 @@ let pendingFiles = [], oreEntries = [];
 let currentFilter = 'tutti', currentFatturaFilter = 'tutti', currentPage = 'dashboard';
 let calYear, calMonth;
 let gapiInited = false, gisInited = false, tokenClient;
+let modalDirty = false; // traccia se ci sono modifiche non salvate
 
 // ─── GOOGLE API ───────────────────────────────────────────────────────────────
 function gapiLoaded() {
@@ -712,7 +713,13 @@ function setSyncStatus(s,l) { document.getElementById('sync-dot').className='syn
 function setLoading(m) { document.getElementById('loading-text').textContent=m; document.getElementById('loading-overlay').style.display='flex'; }
 function hideLoading() { document.getElementById('loading-overlay').style.display='none'; }
 function showToast(msg,type='success') { const t=document.getElementById('toast'); t.textContent=msg; t.className='toast '+type+' show'; setTimeout(()=>t.classList.remove('show'),2800); }
-function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function closeModal(id, force=false) {
+  if (!force && modalDirty && id === 'modal-intervento') {
+    if (!confirm('Hai modifiche non salvate. Vuoi davvero chiudere?')) return;
+  }
+  document.getElementById(id).classList.remove('open');
+  if (id === 'modal-intervento') modalDirty = false;
+}
 
 // ─── RENDER ───────────────────────────────────────────────────────────────────
 function updateYearFilterOptions() {
@@ -741,7 +748,7 @@ function renderDashboard() {
 function renderTable() {
   const search=(document.getElementById('search-input')?.value||'').toLowerCase();
   const anno=document.getElementById('interventi-year-filter')?.value||'tutti';
-  const list=interventi.filter(i=>(currentFilter==='tutti'||i.stato===currentFilter)&&(anno==='tutti'||(i.data&&i.data.split('-')[0]===anno))&&(!search||i.titolo.toLowerCase().includes(search)||getClientName(i.cliente).toLowerCase().includes(search)));
+  const list=interventi.filter(i=>(currentFilter==='tutti'||i.stato===currentFilter)&&(anno==='tutti'||(i.data&&i.data.split('-')[0]===anno))&&(!search||i.titolo.toLowerCase().includes(search)||getClientName(i.cliente).toLowerCase().includes(search)||(i.offerta_num||'').toLowerCase().includes(search)||(i.ordine_num||'').toLowerCase().includes(search)));
   document.getElementById('main-tbody').innerHTML=list.length
     ?list.map(i=>`<tr onclick="openDetail('${i.id}')"><td>${i.offerta_num||'—'}</td><td><strong>${i.titolo}</strong><br><small style="color:var(--muted)">${i.indirizzo||''}</small></td><td>${getClientName(i.cliente)}</td><td>${statoInterventoBadge(i.stato)}</td><td>${formatOre(parseFloat(i.ore_totali||0))}</td><td>${i.data||'—'}</td><td>${statoFatturaBadge(i.stato_fattura)}</td><td><button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openEditIntervento('${i.id}')">✏️</button></td></tr>`).join('')
     :'<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--muted)">Nessun intervento trovato</td></tr>';
@@ -750,9 +757,9 @@ function renderTable() {
 function renderFatture() {
   const search=(document.getElementById('fattura-search-input')?.value||'').toLowerCase();
   const anno=document.getElementById('fatture-year-filter')?.value||'tutti';
-  const list=interventi.filter(i=>(currentFatturaFilter==='tutti'||i.stato_fattura===currentFatturaFilter)&&(anno==='tutti'||(i.data&&i.data.split('-')[0]===anno))&&(!search||getClientName(i.cliente).toLowerCase().includes(search)||i.titolo.toLowerCase().includes(search)));
+  const list=interventi.filter(i=>(currentFatturaFilter==='tutti'||i.stato_fattura===currentFatturaFilter)&&(anno==='tutti'||(i.data&&i.data.split('-')[0]===anno))&&(!search||getClientName(i.cliente).toLowerCase().includes(search)||i.titolo.toLowerCase().includes(search)||(i.offerta_num||'').toLowerCase().includes(search)||(i.fattura_num||'').toLowerCase().includes(search)));
   document.getElementById('fatture-tbody').innerHTML=list.length
-    ?list.map(i=>`<tr onclick="openDetail('${i.id}')"><td>${i.offerta_num||'—'}</td><td><strong>${i.titolo}</strong></td><td>${getClientName(i.cliente)}</td><td>${i.data||'—'}</td><td>€ ${parseFloat(i.importo||0).toFixed(2)}</td><td>${statoFatturaBadge(i.stato_fattura)}</td><td>${i.fattura_num||'—'}</td><td><button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openEditIntervento('${i.id}')">✏️</button></td></tr>`).join('')
+    ?list.map(i=>`<tr onclick="openDetail('${i.id}')"><td>${i.offerta_num||'—'}</td><td><strong>${i.titolo}</strong></td><td>${getClientName(i.cliente)}</td><td>${fmtDataIT(i.data)||'—'}</td><td>€ ${parseFloat(i.importo||0).toFixed(2)}</td><td>${statoFatturaBadge(i.stato_fattura)}</td><td>${i.fattura_num||'—'}</td><td><button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openEditIntervento('${i.id}')">✏️</button></td></tr>`).join('')
     :'<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--muted)">Nessuna fattura trovata</td></tr>';
 }
 
@@ -818,14 +825,27 @@ function openNewIntervento() {
   document.getElementById('f_stato_fattura').value='';
   document.getElementById('file_preview').innerHTML='';
   renderHoursList();
+  document.getElementById('f_stato').onchange = function() {
+    if (this.value !== 'chiuso') {
+      document.getElementById('f_stato_fattura').value = '';
+    }
+  };
   document.getElementById('f_cliente').innerHTML='<option value="">— Seleziona —</option>'+clienti.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');
+  modalDirty = false;
+  // marca dirty al primo cambiamento
+  setTimeout(() => {
+    document.querySelectorAll('#modal-intervento .form-control').forEach(el => {
+      el.addEventListener('change', () => { modalDirty = true; }, { once: true });
+      el.addEventListener('input', () => { modalDirty = true; }, { once: true });
+    });
+  }, 100);
   document.getElementById('modal-intervento').classList.add('open');
 }
 
 function openEditIntervento(id) {
   const i=interventi.find(x=>x.id===id); if(!i) return;
   editingId=id; pendingFiles=i.files?[...i.files]:[];
-  oreEntries=(i.ore_entries&&i.ore_entries.length)?i.ore_entries.map(e=>({id:Date.now()+Math.random(),dalle:e.dalle||'',alle:e.alle||'',pausa:e.pausa||'0'})):[];
+  oreEntries=(i.ore_entries&&i.ore_entries.length)?i.ore_entries.map(e=>({id:Date.now()+Math.random(),dalle:e.dalle||'',alle:e.alle||'',pausa:e.pausa||'0',data:e.data||''})):[];
   document.getElementById('modal-title-intervento').textContent='Modifica Intervento';
   document.getElementById('f_titolo').value=i.titolo||'';
   document.getElementById('f_stato').value=i.stato||'aperto';
@@ -844,6 +864,13 @@ function openEditIntervento(id) {
   renderHoursList();
   document.getElementById('f_cliente').innerHTML='<option value="">— Seleziona —</option>'+clienti.map(c=>`<option value="${c.id}"${c.id===i.cliente?' selected':''}>${c.nome}</option>`).join('');
   renderFilePreview();
+  modalDirty = false;
+  setTimeout(() => {
+    document.querySelectorAll('#modal-intervento .form-control').forEach(el => {
+      el.addEventListener('change', () => { modalDirty = true; }, { once: true });
+      el.addEventListener('input', () => { modalDirty = true; }, { once: true });
+    });
+  }, 100);
   document.getElementById('modal-intervento').classList.add('open');
 }
 
@@ -856,24 +883,35 @@ function renderFilePreview() {
 }
 function removeFile(idx) {
   const f = pendingFiles[idx];
-  if (f && f.id) deleteFileFromDrive(f.id);
+  if (f && f.id && !f.data) deleteFileFromDrive(f.id); // solo file Drive, non base64 legacy
   pendingFiles.splice(idx, 1);
   renderFilePreview();
 }
 async function addFiles(files) {
   const area = document.querySelector('.file-upload-area');
-  area.textContent = 'Caricamento in corso...';
-  for (const file of Array.from(files)) {
+  const saveBtn = document.getElementById('save_intervento_btn');
+  const fileList = Array.from(files);
+  let done = 0;
+  // blocca salvataggio durante upload
+  saveBtn.disabled = true;
+  saveBtn.textContent = `⏳ Caricamento allegati (0/${fileList.length})...`;
+  area.innerHTML = `<div style="color:var(--blue)">⏳ Caricamento in corso...</div>`;
+  for (const file of fileList) {
     try {
       const uploaded = await uploadFileToDrive(file);
       pendingFiles.push(uploaded);
+      done++;
+      saveBtn.textContent = `⏳ Caricamento allegati (${done}/${fileList.length})...`;
       renderFilePreview();
     } catch(e) {
       showToast('Errore caricamento: ' + file.name, 'error');
       console.error(e);
     }
   }
-  area.textContent = '📎 Clicca per allegare file';
+  area.innerHTML = '📎 Clicca per allegare altri file';
+  saveBtn.disabled = false;
+  saveBtn.textContent = 'Salva';
+  if (done > 0) showToast(`${done} allegato/i caricato/i ✓`);
 }
 
 async function saveIntervento() {
@@ -916,7 +954,8 @@ async function saveIntervento() {
     if(editingId) await updateSheetRow('Interventi',editingId,row,'S');
     else await appendRow('Interventi',row);
     await syncAll();
-    closeModal('modal-intervento');
+    modalDirty = false;
+    closeModal('modal-intervento', true);
     showToast(editingId?'Intervento aggiornato ✓':'Intervento creato ✓');
     editingId=null;
   } catch(e){showToast('Errore salvataggio','error');setSyncStatus('error','Errore');console.error(e);}
@@ -932,7 +971,7 @@ function openDetail(id) {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
       <div><div style="font-size:10px;color:var(--muted)">STATO</div><div>${statoInterventoBadge(i.stato)}</div></div>
       <div><div style="font-size:10px;color:var(--muted)">CLIENTE</div><div>${getClientName(i.cliente)}</div></div>
-      <div><div style="font-size:10px;color:var(--muted)">DATA</div><div>${i.data||'—'}</div></div>
+      <div><div style="font-size:10px;color:var(--muted)">DATA</div><div>${fmtDataIT(i.data)||'—'}</div></div>
       <div><div style="font-size:10px;color:var(--muted)">INDIRIZZO</div><div>${i.indirizzo||'—'}</div></div>
       <div><div style="font-size:10px;color:var(--muted)">ORE LAVORO</div><div>${oreHtml}</div></div>
       <div><div style="font-size:10px;color:var(--muted)">RAPPORTINO</div><div>${i.rapportino_num?`${i.rapportino_num} del ${i.rapportino_data||'—'}`:'—'}</div></div>
@@ -1154,7 +1193,7 @@ function exportToPDF(intervento) {
   const statoLabel={'aperto':'Aperto','in-corso':'In Corso','attesa-ordine':'Attesa Ordine','chiuso':'Chiuso'}[intervento.stato]||intervento.stato||'—';
   let oreRows='';
   if(intervento.ore_entries&&intervento.ore_entries.length){
-    oreRows=intervento.ore_entries.map((e,idx)=>`<tr style="border-bottom:1px solid #e5e7eb"><td style="padding:6px 10px;font-size:12px">${idx+1}</td><td style="padding:6px 10px;font-size:12px">${e.dalle||'—'}</td><td style="padding:6px 10px;font-size:12px">${e.alle||'—'}</td><td style="padding:6px 10px;font-size:12px">${e.pausa||0} min</td><td style="padding:6px 10px;font-size:12px;font-weight:600">${formatOre(calcolaOreDaEntry(e))}</td></tr>`).join('');
+    oreRows=intervento.ore_entries.map((e,idx)=>`<tr style="border-bottom:1px solid #e5e7eb"><td style="padding:6px 10px;font-size:12px">${idx+1}</td><td style="padding:6px 10px;font-size:12px">${e.data?fmtDataIT(e.data):''}</td><td style="padding:6px 10px;font-size:12px">${e.dalle||'—'}</td><td style="padding:6px 10px;font-size:12px">${e.alle||'—'}</td><td style="padding:6px 10px;font-size:12px">${e.pausa||0} min</td><td style="padding:6px 10px;font-size:12px;font-weight:600">${formatOre(calcolaOreDaEntry(e))}</td></tr>`).join('');
   }else oreRows=`<tr><td colspan="5" style="padding:10px;font-size:12px;color:#888">Nessuna fascia oraria</td></tr>`;
 
   const html=`<div style="font-family:'Helvetica Neue',Arial,sans-serif;color:#1a1a2e;font-size:13px">
@@ -1185,9 +1224,9 @@ function exportToPDF(intervento) {
         <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#1a3a6e;margin-bottom:8px">Dettaglio ore lavoro</div>
         <div style="border:1px solid #dde3ee;border-radius:8px;overflow:hidden">
           <table style="width:100%;border-collapse:collapse">
-            <thead><tr style="background:#1a3a6e;color:#fff"><th style="padding:8px 10px;text-align:left;font-size:10px">#</th><th style="padding:8px 10px;text-align:left;font-size:10px">Dalle</th><th style="padding:8px 10px;text-align:left;font-size:10px">Alle</th><th style="padding:8px 10px;text-align:left;font-size:10px">Pausa</th><th style="padding:8px 10px;text-align:left;font-size:10px">Ore nette</th></tr></thead>
+            <thead><tr style="background:#1a3a6e;color:#fff"><th style="padding:8px 10px;text-align:left;font-size:10px">#</th><th style="padding:8px 10px;text-align:left;font-size:10px">Data</th><th style="padding:8px 10px;text-align:left;font-size:10px">Dalle</th><th style="padding:8px 10px;text-align:left;font-size:10px">Alle</th><th style="padding:8px 10px;text-align:left;font-size:10px">Pausa</th><th style="padding:8px 10px;text-align:left;font-size:10px">Ore nette</th></tr></thead>
             <tbody style="background:#fff">${oreRows}</tbody>
-            <tfoot><tr style="background:#eef3fb;border-top:2px solid #1a3a6e"><td colspan="4" style="padding:8px 10px;font-size:12px;font-weight:700;color:#1a3a6e;text-align:right">TOTALE ORE</td><td style="padding:8px 10px;font-size:14px;font-weight:800;color:#1a3a6e">${formatOre(parseFloat(intervento.ore_totali||0))}</td></tr></tfoot>
+            <tfoot><tr style="background:#eef3fb;border-top:2px solid #1a3a6e"><td colspan="5" style="padding:8px 10px;font-size:12px;font-weight:700;color:#1a3a6e;text-align:right">TOTALE ORE</td><td style="padding:8px 10px;font-size:14px;font-weight:800;color:#1a3a6e">${formatOre(parseFloat(intervento.ore_totali||0))}</td></tr></tfoot>
           </table>
         </div>
       </div>
