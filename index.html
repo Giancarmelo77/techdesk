@@ -352,6 +352,8 @@
         <div class="form-group"><label class="form-label">Telefono</label><input class="form-control" id="c_tel"></div>
         <div class="form-group"><label class="form-label">Email</label><input class="form-control" id="c_email"></div>
         <div class="form-group"><label class="form-label">Città</label><input class="form-control" id="c_citta"></div>
+        <div class="form-group"><label class="form-label">P.IVA</label><input class="form-control" id="c_piva" placeholder="IT12345678901"></div>
+        <div class="form-group full"><label class="form-label">Indirizzo completo</label><input class="form-control" id="c_indirizzo" placeholder="Via Roma 1, 20100 Milano"></div>
       </div>
     </div>
     <div class="modal-footer">
@@ -559,7 +561,7 @@ async function ensureSheets() {
 
 async function writeHeadersIfEmpty() {
   const intH = [['ID','Titolo','Cliente','Stato','Data','Indirizzo','Descrizione','OreEntries','OreTotali','RapportinoNum','RapportinoData','OffertaNum','OrdineNum','OrdineData','FatturaNum','FatturaData','Importo','StatoFattura','Files']];
-  const cliH = [['ID','Nome','Referente','Telefono','Email','Città']];
+  const cliH = [['ID','Nome','Referente','Telefono','Email','Città','P.IVA','Indirizzo']];
   try {
     const r1 = await gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Interventi!A1' });
     if (!r1.result.values) await writeRange('Interventi!A1', intH);
@@ -574,7 +576,7 @@ async function syncAll() {
   try {
     const [r1, r2] = await Promise.all([
       gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Interventi!A2:S' }),
-      gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Clienti!A2:F' }),
+      gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Clienti!A2:H' }),
     ]);
     interventi = (r1.result.values || []).map(r => ({
       id: r[0]||'', titolo: r[1]||'', cliente: r[2]||'', stato: r[3]||'aperto',
@@ -587,7 +589,7 @@ async function syncAll() {
       files: safeJSON(r[18], [])
     })).filter(i => i.id);
     clienti = (r2.result.values || []).map(r => ({
-      id: r[0]||'', nome: r[1]||'', ref: r[2]||'', tel: r[3]||'', email: r[4]||'', citta: r[5]||''
+      id: r[0]||'', nome: r[1]||'', ref: r[2]||'', tel: r[3]||'', email: r[4]||'', citta: r[5]||'', piva: r[6]||'', indirizzo_completo: r[7]||''
     })).filter(c => c.id);
     renderAll();
     setSyncStatus('ok', 'Sincronizzato ✓');
@@ -661,7 +663,7 @@ function interventoToRow(id, d) {
     JSON.stringify(d.files||[])];
 }
 function clienteToRow(id, d) {
-  return [id, d.nome, d.ref||'', d.tel||'', d.email||'', d.citta||''];
+  return [id, d.nome, d.ref||'', d.tel||'', d.email||'', d.citta||'', d.piva||'', d.indirizzo_completo||''];
 }
 
 // ─── ORE ──────────────────────────────────────────────────────────────────────
@@ -766,7 +768,7 @@ function renderFatture() {
 function renderClienti() {
   const g=document.getElementById('client-grid');
   if(!clienti.length){g.innerHTML='<div style="text-align:center;padding:60px;color:var(--muted)">Nessun cliente. Aggiungine uno!</div>';return;}
-  g.innerHTML=clienti.map(c=>`<div class="client-card" onclick="openClientDetail('${c.id}')"><div class="client-name">${c.nome}</div><div style="font-size:12px;color:var(--muted);line-height:1.8;font-family:var(--mono)">${c.ref?`👤 ${c.ref}<br>`:''}${c.tel?`📞 ${c.tel}<br>`:''}${c.email?`✉️ ${c.email}<br>`:''}${c.citta?`📍 ${c.citta}`:''}</div><div style="margin-top:12px;font-size:11px;color:var(--blue)">🔧 ${interventi.filter(i=>i.cliente===c.id).length} interventi</div></div>`).join('');
+  g.innerHTML=clienti.map(c=>`<div class="client-card" onclick="openClientDetail('${c.id}')"><div class="client-name">${c.nome}</div><div style="font-size:12px;color:var(--muted);line-height:1.8;font-family:var(--mono)">${c.ref?`👤 ${c.ref}<br>`:''}${c.tel?`📞 ${c.tel}<br>`:''}${c.email?`✉️ ${c.email}<br>`:''}${c.citta?`📍 ${c.citta}<br>`:''}${c.piva?`P.IVA: ${c.piva}<br>`:''}${c.indirizzo_completo?`🏠 ${c.indirizzo_completo}`:''}</div><div style="margin-top:12px;font-size:11px;color:var(--blue)">🔧 ${interventi.filter(i=>i.cliente===c.id).length} interventi</div></div>`).join('');
 }
 
 // ─── CALENDAR ─────────────────────────────────────────────────────────────────
@@ -1016,7 +1018,7 @@ async function deleteIntervento(id) {
 function openNewCliente() {
   editingClienteId=null;
   document.getElementById('modal-cliente-title').textContent='Nuovo Cliente';
-  ['c_nome','c_ref','c_tel','c_email','c_citta'].forEach(id=>document.getElementById(id).value='');
+  ['c_nome','c_ref','c_tel','c_email','c_citta','c_piva','c_indirizzo'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('save_cliente_btn').onclick=saveCliente;
   document.getElementById('modal-cliente').classList.add('open');
 }
@@ -1030,6 +1032,8 @@ function openEditCliente(id) {
   document.getElementById('c_tel').value=c.tel||'';
   document.getElementById('c_email').value=c.email||'';
   document.getElementById('c_citta').value=c.citta||'';
+  document.getElementById('c_piva').value=c.piva||'';
+  document.getElementById('c_indirizzo').value=c.indirizzo_completo||'';
   document.getElementById('save_cliente_btn').onclick=async()=>{
     const nome=document.getElementById('c_nome').value.trim();
     if(!nome){showToast('Inserisci ragione sociale','error');return;}
@@ -1038,7 +1042,7 @@ function openEditCliente(id) {
     setSyncStatus('syncing','Salvataggio...');
     const d={nome,ref:document.getElementById('c_ref').value,tel:document.getElementById('c_tel').value,email:document.getElementById('c_email').value,citta:document.getElementById('c_citta').value};
     try{
-      await updateSheetRow('Clienti',id,clienteToRow(id,d),'F');
+      await updateSheetRow('Clienti',id,clienteToRow(id,d),'H');
       await syncAll();closeModal('modal-cliente');showToast('Cliente aggiornato ✓');
       document.getElementById('save_cliente_btn').onclick=saveCliente;
       document.getElementById('modal-cliente-title').textContent='Nuovo Cliente';
@@ -1055,7 +1059,7 @@ async function saveCliente() {
   btn.disabled=true; btn.textContent='Salvataggio...';
   setSyncStatus('syncing','Salvataggio...');
   const id=genId('C');
-  const d={nome,ref:document.getElementById('c_ref').value,tel:document.getElementById('c_tel').value,email:document.getElementById('c_email').value,citta:document.getElementById('c_citta').value};
+  const d={nome,ref:document.getElementById('c_ref').value,tel:document.getElementById('c_tel').value,email:document.getElementById('c_email').value,citta:document.getElementById('c_citta').value,piva:document.getElementById('c_piva').value,indirizzo_completo:document.getElementById('c_indirizzo').value};
   try{
     await appendRow('Clienti',clienteToRow(id,d));
     await syncAll();closeModal('modal-cliente');showToast('Cliente aggiunto ✓');
@@ -1073,6 +1077,8 @@ function openClientDetail(id) {
       <div><div style="font-size:10px;color:var(--muted)">TELEFONO</div><div>${c.tel||'—'}</div></div>
       <div><div style="font-size:10px;color:var(--muted)">EMAIL</div><div>${c.email||'—'}</div></div>
       <div><div style="font-size:10px;color:var(--muted)">CITTÀ</div><div>${c.citta||'—'}</div></div>
+      <div><div style="font-size:10px;color:var(--muted)">P.IVA</div><div>${c.piva||'—'}</div></div>
+      <div class="full"><div style="font-size:10px;color:var(--muted)">INDIRIZZO</div><div>${c.indirizzo_completo||'—'}</div></div>
     </div>`;
   document.getElementById('det_files').innerHTML='';
   document.getElementById('edit_intervento_btn').style.display='';
@@ -1300,6 +1306,24 @@ function exportToPDF(intervento) {
   const cl=getClient(intervento.cliente);
   function fmtD(iso){if(!iso)return'—';const p=iso.split('-');return p.length!==3?iso:`${p[2]}/${p[1]}/${p[0]}`;}
   const statoLabel={'aperto':'Aperto','in-corso':'In Corso','attesa-ordine':'Attesa Ordine','chiuso':'Chiuso'}[intervento.stato]||intervento.stato||'—';
+
+  // Pre-calcola righe Riferimenti (evita backtick annidati che rompono html2pdf)
+  const rowRapportino = intervento.rapportino_num
+    ? '<tr style="border-bottom:1px solid #e8edf5"><td style="font-size:11px;color:#888;padding:6px 14px">Rapportino N.</td><td style="font-size:11px;font-weight:600;color:#1a1a2e;padding:6px 14px">' + intervento.rapportino_num + (intervento.rapportino_data ? ' del ' + fmtD(intervento.rapportino_data) : '') + '</td></tr>' : '';
+  const rowOfferta = intervento.offerta_num
+    ? '<tr style="border-bottom:1px solid #e8edf5"><td style="font-size:11px;color:#888;padding:6px 14px">Ns. Offerta N.</td><td style="font-size:11px;font-weight:600;color:#1a1a2e;padding:6px 14px">' + intervento.offerta_num + '</td></tr>' : '';
+  const rowOrdine = intervento.ordine_num
+    ? '<tr><td style="font-size:11px;color:#888;padding:6px 14px">Ordine Cliente N.</td><td style="font-size:11px;font-weight:600;color:#1a1a2e;padding:6px 14px">' + intervento.ordine_num + (intervento.ordine_data ? ' del ' + fmtD(intervento.ordine_data) : '') + '</td></tr>' : '';
+
+  // Pre-calcola dati cliente
+  const clNome = cl ? cl.nome : '—';
+  const clRef   = cl&&cl.ref   ? '<div style="font-size:11px;color:#444;margin-bottom:4px">&#128100; ' + cl.ref + '</div>' : '';
+  const clTel   = cl&&cl.tel   ? '<div style="font-size:11px;color:#444;margin-bottom:4px">&#128222; ' + cl.tel + '</div>' : '';
+  const clEmail = cl&&cl.email ? '<div style="font-size:11px;color:#444;margin-bottom:4px">&#9993; ' + cl.email + '</div>' : '';
+  const clCitta = cl&&cl.citta ? '<div style="font-size:11px;color:#444;margin-bottom:4px">&#128205; ' + cl.citta + '</div>' : '';
+  const clPiva  = cl&&cl.piva  ? '<div style="font-size:11px;color:#444;margin-bottom:4px"><b>P.IVA:</b> ' + cl.piva + '</div>' : '';
+  const clIndirizzo = cl&&cl.indirizzo_completo ? '<div style="font-size:11px;color:#444;margin-bottom:4px">&#127968; ' + cl.indirizzo_completo + '</div>' : '';
+
   let oreRows='';
   if(intervento.ore_entries&&intervento.ore_entries.length){
     oreRows=intervento.ore_entries.map((e,idx)=>`<tr style="border-bottom:1px solid #e5e7eb"><td style="padding:6px 10px;font-size:12px">${idx+1}</td><td style="padding:6px 10px;font-size:12px">${e.data?fmtDataIT(e.data):''}</td><td style="padding:6px 10px;font-size:12px">${e.dalle||'—'}</td><td style="padding:6px 10px;font-size:12px">${e.alle||'—'}</td><td style="padding:6px 10px;font-size:12px">${e.pausa||0} min</td><td style="padding:6px 10px;font-size:12px;font-weight:600">${formatOre(calcolaOreDaEntry(e))}</td></tr>`).join('');
@@ -1344,15 +1368,15 @@ function exportToPDF(intervento) {
           <table style="width:100%;border-collapse:collapse;background:#f8f9fb">
             <tr style="border-bottom:1px solid #e8edf5">
               <td style="font-size:11px;color:#888;padding:6px 14px;width:45%">Stato</td>
-              <td style="font-size:11px;font-weight:600;color:#1a1a2e;padding:6px 14px">${statoLabel}</td>
+              <td style="font-size:11px;font-weight:600;color:#1a1a2e;padding:6px 14px">" + statoLabel + "</td>
             </tr>
             <tr style="border-bottom:1px solid #e8edf5">
               <td style="font-size:11px;color:#888;padding:6px 14px">Data intervento</td>
-              <td style="font-size:11px;font-weight:600;color:#1a1a2e;padding:6px 14px">${fmtD(intervento.data)}</td>
+              <td style="font-size:11px;font-weight:600;color:#1a1a2e;padding:6px 14px">" + fmtD(intervento.data) + "</td>
             </tr>
-            ${intervento.rapportino_num?`<tr style="border-bottom:1px solid #e8edf5"><td style="font-size:11px;color:#888;padding:6px 14px">Rapportino N.</td><td style="font-size:11px;font-weight:600;color:#1a1a2e;padding:6px 14px">${intervento.rapportino_num}${intervento.rapportino_data?' del '+fmtD(intervento.rapportino_data):''}</td></tr>`:''}
-            ${intervento.offerta_num?`<tr style="border-bottom:1px solid #e8edf5"><td style="font-size:11px;color:#888;padding:6px 14px">Ns. Offerta N.</td><td style="font-size:11px;font-weight:600;color:#1a1a2e;padding:6px 14px">${intervento.offerta_num}</td></tr>`:''}
-            ${intervento.ordine_num?`<tr><td style="font-size:11px;color:#888;padding:6px 14px">Ordine Cliente N.</td><td style="font-size:11px;font-weight:600;color:#1a1a2e;padding:6px 14px">${intervento.ordine_num}${intervento.ordine_data?' del '+fmtD(intervento.ordine_data):''}</td></tr>`:''}
+            " + rowRapportino + "
+            " + rowOfferta + "
+            " + rowOrdine + "
           </table>
         </div>
 
@@ -1360,11 +1384,12 @@ function exportToPDF(intervento) {
         <div style="flex:1;border:1px solid #dde3ee;border-radius:8px;overflow:hidden">
           <div style="background:#1a3a6e;color:#fff;padding:7px 14px;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase">Cliente</div>
           <div style="background:#f8f9fb;padding:12px 14px">
-            <div style="font-size:13px;font-weight:700;color:#1a1a2e;margin-bottom:8px">${cl?cl.nome:'—'}</div>
-            ${cl&&cl.ref?`<div style="font-size:11px;color:#444;margin-bottom:4px;display:flex;gap:6px"><span style="color:#1a3a6e;width:14px">👤</span>${cl.ref}</div>`:''}
-            ${cl&&cl.tel?`<div style="font-size:11px;color:#444;margin-bottom:4px;display:flex;gap:6px"><span style="color:#1a3a6e;width:14px">📞</span>${cl.tel}</div>`:''}
-            ${cl&&cl.email?`<div style="font-size:11px;color:#444;margin-bottom:4px;display:flex;gap:6px"><span style="color:#1a3a6e;width:14px">✉️</span>${cl.email}</div>`:''}
-            ${cl&&cl.citta?`<div style="font-size:11px;color:#444;display:flex;gap:6px"><span style="color:#1a3a6e;width:14px">📍</span>${cl.citta}</div>`:''}
+            <div style="font-size:13px;font-weight:700;color:#1a1a2e;margin-bottom:8px">" + clNome + "</div>
+            " + clIndirizzo + "
+            " + clRef + "
+            " + clTel + "
+            " + clEmail + "
+            " + clPiva + "
           </div>
         </div>
       </div>
