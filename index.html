@@ -397,33 +397,74 @@ function riconnetti() {
   if (!confirm('Verrà richiesto di fare di nuovo il login Google. Continuare?')) return;
   localStorage.removeItem('td_token');
   localStorage.removeItem('td_scope_v2');
+  localStorage.removeItem('td_token_time');
   localStorage.removeItem('td_drive_folder');
   location.reload();
 }
 
-function checkAuth() {
-  const saved = localStorage.getItem('td_token');
-  const scopeOk = localStorage.getItem('td_scope_v2');
-  if (saved && scopeOk) { gapi.client.setToken({ access_token: saved }); onSignedIn(); }
-  else { localStorage.removeItem('td_token'); requestAuth(); }
-}
+const CLIENT_ID = '380905986512-vspgg7f52npf283gg97cc3jnid575o7k.apps.googleusercontent.com';
 
-function requestAuth() {
-  setLoading('Accesso Google richiesto...');
-  const cid = '380905986512-vspgg7f52npf283gg97cc3jnid575o7k.apps.googleusercontent.com';
-  localStorage.setItem('td_client_id', cid);
+function checkAuth() {
+  // Inizializza sempre tokenClient così può rinnovare silenziosamente
   tokenClient = google.accounts.oauth2.initTokenClient({
-    client_id: cid, scope: SCOPES,
+    client_id: CLIENT_ID,
+    scope: SCOPES,
+    prompt: '',
     callback: (resp) => {
-      if (resp.error) { document.getElementById('loading-text').textContent = 'Accesso negato. Ricarica e riprova.'; setSyncStatus('error','Errore accesso'); return; }
-      sessionStorage.removeItem('td_token');
+      if (resp.error) {
+        // rinnovo silenzioso fallito — chiedi login esplicito
+        requestAuthExplicit();
+        return;
+      }
       localStorage.setItem('td_token', resp.access_token);
       localStorage.setItem('td_scope_v2', '1');
+      localStorage.setItem('td_token_time', Date.now().toString());
+      gapi.client.setToken({ access_token: resp.access_token });
+      onSignedIn();
+    }
+  });
+
+  const saved = localStorage.getItem('td_token');
+  const scopeOk = localStorage.getItem('td_scope_v2');
+  const tokenTime = parseInt(localStorage.getItem('td_token_time') || '0');
+  const elapsed = Date.now() - tokenTime;
+
+  if (saved && scopeOk && elapsed < 55 * 60 * 1000) {
+    // token ancora valido (< 55 minuti)
+    gapi.client.setToken({ access_token: saved });
+    onSignedIn();
+  } else if (scopeOk) {
+    // token scaduto ma utente già autorizzato — rinnova silenziosamente
+    setLoading('Rinnovo sessione...');
+    tokenClient.requestAccessToken({ prompt: '' });
+  } else {
+    // primo accesso
+    requestAuthExplicit();
+  }
+}
+
+function requestAuthExplicit() {
+  setLoading('Accesso Google richiesto...');
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: SCOPES,
+    callback: (resp) => {
+      if (resp.error) {
+        document.getElementById('loading-text').textContent = 'Accesso negato. Premi Riconnetti e riprova.';
+        setSyncStatus('error', 'Errore accesso');
+        return;
+      }
+      localStorage.setItem('td_token', resp.access_token);
+      localStorage.setItem('td_scope_v2', '1');
+      localStorage.setItem('td_token_time', Date.now().toString());
+      gapi.client.setToken({ access_token: resp.access_token });
       onSignedIn();
     }
   });
   tokenClient.requestAccessToken({ prompt: 'consent' });
 }
+
+function requestAuth() { requestAuthExplicit(); }
 
 async function onSignedIn() {
   setSyncStatus('syncing', 'Connessione...');
