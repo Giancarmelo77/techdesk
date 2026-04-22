@@ -1,4 +1,4 @@
-><!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="it">
 <head>
 <meta charset="UTF-8">
@@ -1373,132 +1373,118 @@ function exportToPDF(intervento) {
     ? `<img src="${pdfSignatures.cliente}" style="max-width:100%;height:60px;object-fit:contain;display:block;margin:4px 0">`
     : `<div style="height:60px;border-bottom:1px solid #aaa;margin:4px 0 0;"></div>`;
 
-  const html=`<div style="font-family:'Helvetica Neue',Arial,sans-serif;color:#1a1a2e;font-size:13px">
+  const tdStyle = 'font-size:11px;color:#888;padding:6px 14px;';
+  const tdValStyle = 'font-size:11px;font-weight:600;color:#1a1a2e;padding:6px 14px';
+  const rowStyle = 'border-bottom:1px solid #e8edf5';
+  const headerStyle = 'background:#1a3a6e;color:#fff;padding:7px 14px;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase';
 
-    <!-- INTESTAZIONE -->
-    <div style="background:#1a3a6e;color:#fff;padding:20px 32px 16px;display:flex;justify-content:space-between;align-items:center">
-      <div>
-        <div style="font-size:22px;font-weight:800;letter-spacing:-0.5px">Tekno<span style="font-weight:400">Automazione</span></div>
-        <div style="font-size:10px;opacity:.7;letter-spacing:2px;text-transform:uppercase;margin-top:2px">Rapporto Intervento Tecnico</div>
-      </div>
-      <div style="text-align:right;font-size:11px;opacity:.8">
-        <div>Data: ${fmtD(intervento.data)}</div>
-        <div style="margin-top:2px">Intervento #${intervento.id}</div>
-      </div>
-    </div>
+  let html = '<div style="font-family:Helvetica Neue,Arial,sans-serif;color:#1a1a2e;font-size:13px">';
 
-    <!-- TITOLO -->
-    <div style="background:#eef3fb;padding:12px 32px;border-bottom:3px solid #1a3a6e">
-      <div style="font-size:16px;font-weight:700;color:#1a3a6e">${intervento.titolo||'—'}</div>
-      ${intervento.indirizzo?`<div style="font-size:11px;color:#555;margin-top:2px">📍 ${intervento.indirizzo}</div>`:''}
-    </div>
+  // INTESTAZIONE
+  html += '<div style="background:#1a3a6e;color:#fff;padding:20px 32px 16px;display:flex;justify-content:space-between;align-items:center">';
+  html += '<div>';
+  html += '<div style="font-size:22px;font-weight:800">Tekno<span style="font-weight:400">Automazione</span></div>';
+  html += '<div style="font-size:10px;opacity:.7;letter-spacing:2px;text-transform:uppercase;margin-top:2px">Rapporto Intervento Tecnico</div>';
+  html += '</div>';
+  html += '<div style="text-align:right;font-size:11px;opacity:.8">';
+  html += '<div>Data: ' + fmtD(intervento.data) + '</div>';
+  html += '<div style="margin-top:2px">Intervento #' + intervento.id + '</div>';
+  html += '</div></div>';
 
-    <div style="padding:20px 32px">
+  // TITOLO
+  html += '<div style="background:#eef3fb;padding:12px 32px;border-bottom:3px solid #1a3a6e">';
+  html += '<div style="font-size:16px;font-weight:700;color:#1a3a6e">' + (intervento.titolo||'—') + '</div>';
+  if (intervento.indirizzo) html += '<div style="font-size:11px;color:#555;margin-top:2px">&#128205; ' + intervento.indirizzo + '</div>';
+  html += '</div>';
 
-      <!-- RIFERIMENTI + CLIENTE affiancati -->
-      <div style="display:flex;gap:16px;margin-bottom:18px">
+  html += '<div style="padding:20px 32px">';
 
-        <!-- RIFERIMENTI -->
-        <div style="flex:1;border:1px solid #dde3ee;border-radius:8px;overflow:hidden">
-          <div style="background:#1a3a6e;color:#fff;padding:7px 14px;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase">Riferimenti documento</div>
-          <table style="width:100%;border-collapse:collapse;background:#f8f9fb">
-            <tr style="border-bottom:1px solid #e8edf5">
-              <td style="font-size:11px;color:#888;padding:6px 14px;width:45%">Stato</td>
-              <td style="font-size:11px;font-weight:600;color:#1a1a2e;padding:6px 14px">" + statoLabel + "</td>
-            </tr>
-            <tr style="border-bottom:1px solid #e8edf5">
-              <td style="font-size:11px;color:#888;padding:6px 14px">Data intervento</td>
-              <td style="font-size:11px;font-weight:600;color:#1a1a2e;padding:6px 14px">" + fmtD(intervento.data) + "</td>
-            </tr>
-            " + rowRapportino + "
-            " + rowOfferta + "
-            " + rowOrdine + "
-          </table>
-        </div>
+  // RIQUADRI RIFERIMENTI + CLIENTE
+  html += '<div style="display:flex;gap:16px;margin-bottom:18px">';
 
-        <!-- CLIENTE -->
-        <div style="flex:1;border:1px solid #dde3ee;border-radius:8px;overflow:hidden">
-          <div style="background:#1a3a6e;color:#fff;padding:7px 14px;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase">Cliente</div>
-          <div style="background:#f8f9fb;padding:12px 14px">
-            <div style="font-size:13px;font-weight:700;color:#1a1a2e;margin-bottom:8px">" + clNome + "</div>
-            " + clIndirizzo + "
-            " + clRef + "
-            " + clTel + "
-            " + clEmail + "
-            " + clPiva + "
-          </div>
-        </div>
-      </div>
+  // RIFERIMENTI
+  html += '<div style="flex:1;border:1px solid #dde3ee;border-radius:8px;overflow:hidden">';
+  html += '<div style="' + headerStyle + '">Riferimenti documento</div>';
+  html += '<table style="width:100%;border-collapse:collapse;background:#f8f9fb">';
+  html += '<tr style="' + rowStyle + '"><td style="' + tdStyle + 'width:45%">Stato</td><td style="' + tdValStyle + '">' + statoLabel + '</td></tr>';
+  html += '<tr style="' + rowStyle + '"><td style="' + tdStyle + '">Data intervento</td><td style="' + tdValStyle + '">' + fmtD(intervento.data) + '</td></tr>';
+  if (intervento.rapportino_num) html += '<tr style="' + rowStyle + '"><td style="' + tdStyle + '">Rapportino N.</td><td style="' + tdValStyle + '">' + intervento.rapportino_num + (intervento.rapportino_data ? ' del ' + fmtD(intervento.rapportino_data) : '') + '</td></tr>';
+  if (intervento.offerta_num)    html += '<tr style="' + rowStyle + '"><td style="' + tdStyle + '">Ns. Offerta N.</td><td style="' + tdValStyle + '">' + intervento.offerta_num + '</td></tr>';
+  if (intervento.ordine_num)     html += '<tr><td style="' + tdStyle + '">Ordine Cliente N.</td><td style="' + tdValStyle + '">' + intervento.ordine_num + (intervento.ordine_data ? ' del ' + fmtD(intervento.ordine_data) : '') + '</td></tr>';
+  html += '</table></div>';
 
-      <!-- ORE LAVORO -->
-      <div style="margin-bottom:18px">
-        <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#1a3a6e;margin-bottom:8px">Dettaglio ore lavoro</div>
-        <div style="border:1px solid #dde3ee;border-radius:8px;overflow:hidden">
-          <table style="width:100%;border-collapse:collapse">
-            <thead>
-              <tr style="background:#1a3a6e;color:#fff">
-                <th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600">#</th>
-                <th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600">Data</th>
-                <th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600">Dalle</th>
-                <th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600">Alle</th>
-                <th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600">Pausa</th>
-                <th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600">Ore nette</th>
-              </tr>
-            </thead>
-            <tbody style="background:#fff">${oreRows}</tbody>
-            <tfoot>
-              <tr style="background:#eef3fb;border-top:2px solid #1a3a6e">
-                <td colspan="5" style="padding:8px 10px;font-size:11px;font-weight:700;color:#1a3a6e;text-align:right">TOTALE ORE</td>
-                <td style="padding:8px 10px;font-size:14px;font-weight:800;color:#1a3a6e">${formatOre(parseFloat(intervento.ore_totali||0))}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </div>
+  // CLIENTE
+  html += '<div style="flex:1;border:1px solid #dde3ee;border-radius:8px;overflow:hidden">';
+  html += '<div style="' + headerStyle + '">Cliente</div>';
+  html += '<div style="background:#f8f9fb;padding:12px 14px">';
+  html += '<div style="font-size:13px;font-weight:700;color:#1a1a2e;margin-bottom:8px">' + clNome + '</div>';
+  if (cl && cl.indirizzo_completo) html += '<div style="font-size:11px;color:#444;margin-bottom:4px">&#127968; ' + cl.indirizzo_completo + '</div>';
+  if (cl && cl.ref)   html += '<div style="font-size:11px;color:#444;margin-bottom:4px">&#128100; ' + cl.ref + '</div>';
+  if (cl && cl.tel)   html += '<div style="font-size:11px;color:#444;margin-bottom:4px">&#128222; ' + cl.tel + '</div>';
+  if (cl && cl.email) html += '<div style="font-size:11px;color:#444;margin-bottom:4px">&#9993; ' + cl.email + '</div>';
+  if (cl && cl.piva)  html += '<div style="font-size:11px;color:#444;margin-bottom:4px"><b>P.IVA:</b> ' + cl.piva + '</div>';
+  if (cl && cl.citta) html += '<div style="font-size:11px;color:#444">&#128205; ' + cl.citta + '</div>';
+  html += '</div></div>';
+  html += '</div>';
 
-      <!-- DESCRIZIONE -->
-      <div style="margin-bottom:20px">
-        <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#1a3a6e;margin-bottom:8px">Descrizione lavori</div>
-        <div style="background:#f8f9fb;border:1px solid #dde3ee;border-radius:8px;padding:14px;font-size:12px;line-height:1.8;min-height:70px;color:#333">${intervento.descrizione||''}</div>
-      </div>
+  // ORE LAVORO
+  html += '<div style="margin-bottom:18px">';
+  html += '<div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#1a3a6e;margin-bottom:8px">Dettaglio ore lavoro</div>';
+  html += '<div style="border:1px solid #dde3ee;border-radius:8px;overflow:hidden">';
+  html += '<table style="width:100%;border-collapse:collapse">';
+  html += '<thead><tr style="background:#1a3a6e;color:#fff">';
+  html += '<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600">#</th>';
+  html += '<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600">Data</th>';
+  html += '<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600">Dalle</th>';
+  html += '<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600">Alle</th>';
+  html += '<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600">Pausa</th>';
+  html += '<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600">Ore nette</th>';
+  html += '</tr></thead>';
+  html += '<tbody style="background:#fff">' + oreRows + '</tbody>';
+  html += '<tfoot><tr style="background:#eef3fb;border-top:2px solid #1a3a6e">';
+  html += '<td colspan="5" style="padding:8px 10px;font-size:11px;font-weight:700;color:#1a3a6e;text-align:right">TOTALE ORE</td>';
+  html += '<td style="padding:8px 10px;font-size:14px;font-weight:800;color:#1a3a6e">' + formatOre(parseFloat(intervento.ore_totali||0)) + '</td>';
+  html += '</tr></tfoot></table></div></div>';
 
-      <!-- FIRME -->
-      <div>
-        <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#1a3a6e;margin-bottom:12px">Firme di accettazione</div>
-        <div style="display:flex;gap:20px">
+  // DESCRIZIONE
+  html += '<div style="margin-bottom:20px">';
+  html += '<div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#1a3a6e;margin-bottom:8px">Descrizione lavori</div>';
+  html += '<div style="background:#f8f9fb;border:1px solid #dde3ee;border-radius:8px;padding:14px;font-size:12px;line-height:1.8;min-height:70px;color:#333">' + (intervento.descrizione||'') + '</div>';
+  html += '</div>';
 
-          <!-- Firma Tecnico -->
-          <div style="flex:1;border:1px solid #dde3ee;border-radius:8px;overflow:hidden">
-            <div style="background:#1a3a6e;color:#fff;padding:7px 14px;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase">Tecnico esecutore</div>
-            <div style="padding:12px 14px;background:#f8f9fb;min-height:110px">
-              ${sigTecnico}
-              <div style="font-size:10px;color:#555;margin-top:8px">Nome: ___________________________</div>
-              <div style="font-size:10px;color:#555;margin-top:4px">Data: ${fmtD(intervento.data)}</div>
-            </div>
-          </div>
+  // FIRME
+  html += '<div>';
+  html += '<div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#1a3a6e;margin-bottom:12px">Firme di accettazione</div>';
+  html += '<div style="display:flex;gap:20px">';
 
-          <!-- Firma Cliente -->
-          <div style="flex:1;border:1px solid #dde3ee;border-radius:8px;overflow:hidden">
-            <div style="background:#1a3a6e;color:#fff;padding:7px 14px;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase">Cliente — Accettazione lavori</div>
-            <div style="padding:12px 14px;background:#f8f9fb;min-height:110px">
-              ${sigCliente}
-              <div style="font-size:10px;color:#555;margin-top:8px">Nome: ___________________________</div>
-              <div style="font-size:10px;color:#555;margin-top:4px">Data: ${fmtD(intervento.data)}</div>
-            </div>
-          </div>
+  // Firma Tecnico
+  html += '<div style="flex:1;border:1px solid #dde3ee;border-radius:8px;overflow:hidden">';
+  html += '<div style="' + headerStyle + '">Tecnico esecutore</div>';
+  html += '<div style="padding:12px 14px;background:#f8f9fb;min-height:110px">';
+  html += sigTecnico;
+  html += '<div style="font-size:10px;color:#555;margin-top:8px">Nome: ___________________________</div>';
+  html += '<div style="font-size:10px;color:#555;margin-top:4px">Data: ' + fmtD(intervento.data) + '</div>';
+  html += '</div></div>';
 
-        </div>
-      </div>
+  // Firma Cliente
+  html += '<div style="flex:1;border:1px solid #dde3ee;border-radius:8px;overflow:hidden">';
+  html += '<div style="' + headerStyle + '">Cliente &mdash; Accettazione lavori</div>';
+  html += '<div style="padding:12px 14px;background:#f8f9fb;min-height:110px">';
+  html += sigCliente;
+  html += '<div style="font-size:10px;color:#555;margin-top:8px">Nome: ___________________________</div>';
+  html += '<div style="font-size:10px;color:#555;margin-top:4px">Data: ' + fmtD(intervento.data) + '</div>';
+  html += '</div></div>';
 
-    </div>
+  html += '</div></div>';
+  html += '</div>';
 
-    <!-- FOOTER -->
-    <div style="background:#f0f2f7;border-top:1px solid #dde3ee;padding:8px 32px;display:flex;justify-content:space-between;align-items:center;margin-top:16px">
-      <div style="font-size:10px;color:#888">Tekno Automazione — Documento generato il ${new Date().toLocaleDateString('it-IT')}</div>
-      <div style="font-size:10px;color:#888">Intervento #${intervento.id}</div>
-    </div>
+  // FOOTER
+  html += '<div style="background:#f0f2f7;border-top:1px solid #dde3ee;padding:8px 32px;display:flex;justify-content:space-between;align-items:center;margin-top:16px">';
+  html += '<div style="font-size:10px;color:#888">Tekno Automazione &mdash; Documento generato il ' + new Date().toLocaleDateString('it-IT') + '</div>';
+  html += '<div style="font-size:10px;color:#888">Intervento #' + intervento.id + '</div>';
+  html += '</div>';
 
-  </div>`;
+  html += '</div>';
 
   html2pdf().set({
     margin: 0,
