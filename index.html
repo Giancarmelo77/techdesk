@@ -1353,15 +1353,6 @@ function confirmSignaturesAndPrint() {
 }
 
 function exportToPDF(intervento) {
-  console.log('PDF intervento dati:', JSON.stringify({
-    id: intervento.id,
-    stato: intervento.stato,
-    data: intervento.data,
-    rapportino_num: intervento.rapportino_num,
-    offerta_num: intervento.offerta_num,
-    ordine_num: intervento.ordine_num,
-    cliente: intervento.cliente
-  }));
   const cl=getClient(intervento.cliente);
   function fmtD(iso){if(!iso)return'—';const p=iso.split('-');return p.length!==3?iso:`${p[2]}/${p[1]}/${p[0]}`;}
   const statoLabel={'aperto':'Aperto','in-corso':'In Corso','attesa-ordine':'Attesa Ordine','chiuso':'Chiuso'}[intervento.stato]||intervento.stato||'—';
@@ -1404,15 +1395,14 @@ function exportToPDF(intervento) {
   let html = '<div style="font-family:Helvetica Neue,Arial,sans-serif;color:#1a1a2e;font-size:13px">';
 
   // INTESTAZIONE
-  html += '<div style="background:#1a3a6e;color:#fff;padding:20px 32px 16px;display:flex;justify-content:space-between;align-items:center">';
-  html += '<div>';
-  html += '<div style="font-size:22px;font-weight:800">Tekno<span style="font-weight:400">Automazione</span></div>';
+  html += '<table style="width:100%;background:#1a3a6e;color:#fff;border-collapse:collapse">';
+  html += '<tr><td style="padding:20px 32px 16px">';
+  html += '<div style="font-size:22px;font-weight:800">TeknoAutomazione</div>';
   html += '<div style="font-size:10px;opacity:.7;letter-spacing:2px;text-transform:uppercase;margin-top:2px">Rapporto Intervento Tecnico</div>';
-  html += '</div>';
-  html += '<div style="text-align:right;font-size:11px;opacity:.8">';
+  html += '</td><td style="padding:20px 32px 16px;text-align:right;font-size:11px;opacity:.8;vertical-align:top">';
   html += '<div>Data: ' + fmtD(intervento.data) + '</div>';
   html += '<div style="margin-top:2px">Intervento #' + intervento.id + '</div>';
-  html += '</div></div>';
+  html += '</td></tr></table>';
 
   // TITOLO
   html += '<div style="background:#eef3fb;padding:12px 32px;border-bottom:3px solid #1a3a6e">';
@@ -1422,33 +1412,34 @@ function exportToPDF(intervento) {
 
   html += '<div style="padding:20px 32px">';
 
-  // RIQUADRI RIFERIMENTI + CLIENTE
-  html += '<div style="display:flex;gap:16px;margin-bottom:18px">';
+  // RIQUADRI RIFERIMENTI + CLIENTE (table layout per compatibilità html2pdf)
+  html += '<table style="width:100%;border-collapse:separate;border-spacing:10px 0;margin-bottom:18px">';
+  html += '<tr style="vertical-align:top">';
 
   // RIFERIMENTI
-  html += '<div style="flex:1;border:1px solid #dde3ee;border-radius:8px;overflow:hidden">';
-  html += '<div style="' + headerStyle + '">Riferimenti documento</div>';
+  html += '<td style="width:50%;border:1px solid #dde3ee;border-radius:8px;overflow:hidden;padding:0">';
+  html += '<div style="' + headerStyle + ';border-radius:7px 7px 0 0">Riferimenti documento</div>';
   html += '<table style="width:100%;border-collapse:collapse;background:#f8f9fb">';
   html += '<tr style="' + rowStyle + '"><td style="' + tdStyle + 'width:45%">Stato</td><td style="' + tdValStyle + '">' + statoLabel + '</td></tr>';
   html += '<tr style="' + rowStyle + '"><td style="' + tdStyle + '">Data intervento</td><td style="' + tdValStyle + '">' + fmtD(intervento.data) + '</td></tr>';
   if (intervento.rapportino_num) html += '<tr style="' + rowStyle + '"><td style="' + tdStyle + '">Rapportino N.</td><td style="' + tdValStyle + '">' + intervento.rapportino_num + (intervento.rapportino_data ? ' del ' + fmtD(intervento.rapportino_data) : '') + '</td></tr>';
   if (intervento.offerta_num)    html += '<tr style="' + rowStyle + '"><td style="' + tdStyle + '">Ns. Offerta N.</td><td style="' + tdValStyle + '">' + intervento.offerta_num + '</td></tr>';
   if (intervento.ordine_num)     html += '<tr><td style="' + tdStyle + '">Ordine Cliente N.</td><td style="' + tdValStyle + '">' + intervento.ordine_num + (intervento.ordine_data ? ' del ' + fmtD(intervento.ordine_data) : '') + '</td></tr>';
-  html += '</table></div>';
+  html += '</table></td>';
 
   // CLIENTE
-  html += '<div style="flex:1;border:1px solid #dde3ee;border-radius:8px;overflow:hidden">';
-  html += '<div style="' + headerStyle + '">Cliente</div>';
+  html += '<td style="width:50%;border:1px solid #dde3ee;border-radius:8px;overflow:hidden;padding:0">';
+  html += '<div style="' + headerStyle + ';border-radius:7px 7px 0 0">Cliente</div>';
   html += '<div style="background:#f8f9fb;padding:12px 14px">';
   html += '<div style="font-size:13px;font-weight:700;color:#1a1a2e;margin-bottom:8px">' + clNome + '</div>';
-  if (cl && cl.indirizzo_completo) html += '<div style="font-size:11px;color:#444;margin-bottom:4px">&#127968; ' + cl.indirizzo_completo + '</div>';
-  if (cl && cl.ref)   html += '<div style="font-size:11px;color:#444;margin-bottom:4px">&#128100; ' + cl.ref + '</div>';
-  if (cl && cl.tel)   html += '<div style="font-size:11px;color:#444;margin-bottom:4px">&#128222; ' + cl.tel + '</div>';
-  if (cl && cl.email) html += '<div style="font-size:11px;color:#444;margin-bottom:4px">&#9993; ' + cl.email + '</div>';
-  if (cl && cl.piva)  html += '<div style="font-size:11px;color:#444;margin-bottom:4px"><b>P.IVA:</b> ' + cl.piva + '</div>';
-  if (cl && cl.citta) html += '<div style="font-size:11px;color:#444">&#128205; ' + cl.citta + '</div>';
-  html += '</div></div>';
-  html += '</div>';
+  if (cl && cl.indirizzo_completo) html += '<div style="font-size:11px;color:#444;margin-bottom:4px">Indirizzo: ' + cl.indirizzo_completo + '</div>';
+  if (cl && cl.ref)   html += '<div style="font-size:11px;color:#444;margin-bottom:4px">Referente: ' + cl.ref + '</div>';
+  if (cl && cl.tel)   html += '<div style="font-size:11px;color:#444;margin-bottom:4px">Tel: ' + cl.tel + '</div>';
+  if (cl && cl.email) html += '<div style="font-size:11px;color:#444;margin-bottom:4px">Email: ' + cl.email + '</div>';
+  if (cl && cl.piva)  html += '<div style="font-size:11px;color:#444;margin-bottom:4px">P.IVA: ' + cl.piva + '</div>';
+  if (cl && cl.citta) html += '<div style="font-size:11px;color:#444">Citta: ' + cl.citta + '</div>';
+  html += '</div></td>';
+  html += '</tr></table>';
 
   // ORE LAVORO
   html += '<div style="margin-bottom:18px">';
@@ -1475,30 +1466,31 @@ function exportToPDF(intervento) {
   html += '<div style="background:#f8f9fb;border:1px solid #dde3ee;border-radius:8px;padding:14px;font-size:12px;line-height:1.8;min-height:70px;color:#333">' + (intervento.descrizione||'') + '</div>';
   html += '</div>';
 
-  // FIRME
+  // FIRME (table layout per compatibilità html2pdf)
   html += '<div>';
   html += '<div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#1a3a6e;margin-bottom:12px">Firme di accettazione</div>';
-  html += '<div style="display:flex;gap:20px">';
+  html += '<table style="width:100%;border-collapse:separate;border-spacing:10px 0">';
+  html += '<tr style="vertical-align:top">';
 
   // Firma Tecnico
-  html += '<div style="flex:1;border:1px solid #dde3ee;border-radius:8px;overflow:hidden">';
-  html += '<div style="' + headerStyle + '">Tecnico esecutore</div>';
+  html += '<td style="width:50%;border:1px solid #dde3ee;border-radius:8px;padding:0;overflow:hidden">';
+  html += '<div style="' + headerStyle + ';border-radius:7px 7px 0 0">Tecnico esecutore</div>';
   html += '<div style="padding:12px 14px;background:#f8f9fb;min-height:110px">';
   html += sigTecnico;
   html += '<div style="font-size:10px;color:#555;margin-top:8px">Nome: ___________________________</div>';
   html += '<div style="font-size:10px;color:#555;margin-top:4px">Data: ' + fmtD(intervento.data) + '</div>';
-  html += '</div></div>';
+  html += '</div></td>';
 
   // Firma Cliente
-  html += '<div style="flex:1;border:1px solid #dde3ee;border-radius:8px;overflow:hidden">';
-  html += '<div style="' + headerStyle + '">Cliente &mdash; Accettazione lavori</div>';
+  html += '<td style="width:50%;border:1px solid #dde3ee;border-radius:8px;padding:0;overflow:hidden">';
+  html += '<div style="' + headerStyle + ';border-radius:7px 7px 0 0">Cliente - Accettazione lavori</div>';
   html += '<div style="padding:12px 14px;background:#f8f9fb;min-height:110px">';
   html += sigCliente;
   html += '<div style="font-size:10px;color:#555;margin-top:8px">Nome: ___________________________</div>';
   html += '<div style="font-size:10px;color:#555;margin-top:4px">Data: ' + fmtD(intervento.data) + '</div>';
-  html += '</div></div>';
+  html += '</div></td>';
 
-  html += '</div></div>';
+  html += '</tr></table></div>';
   html += '</div>';
 
   // FOOTER
