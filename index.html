@@ -1412,33 +1412,39 @@ function exportToPDF(intervento) {
 
   html += '<div style="padding:20px 32px">';
 
-  // RIQUADRI RIFERIMENTI + CLIENTE (table layout per compatibilità html2pdf)
-  html += '<table style="width:100%;border-collapse:separate;border-spacing:10px 0;margin-bottom:18px">';
+  // RIQUADRI RIFERIMENTI + CLIENTE
+  // Costruiamo le righe cliente separatamente
+  let clRows = '';
+  clRows += '<tr><td style="font-size:12px;font-weight:700;color:#1a1a2e;padding:8px 14px 4px 14px" colspan="2">' + clNome + '</td></tr>';
+  if (cl && cl.indirizzo_completo) clRows += '<tr><td style="font-size:11px;color:#888;padding:3px 14px;width:38%">Indirizzo</td><td style="font-size:11px;color:#333;padding:3px 14px">' + cl.indirizzo_completo + '</td></tr>';
+  if (cl && cl.ref)   clRows += '<tr><td style="font-size:11px;color:#888;padding:3px 14px">Referente</td><td style="font-size:11px;color:#333;padding:3px 14px">' + cl.ref + '</td></tr>';
+  if (cl && cl.tel)   clRows += '<tr><td style="font-size:11px;color:#888;padding:3px 14px">Telefono</td><td style="font-size:11px;color:#333;padding:3px 14px">' + cl.tel + '</td></tr>';
+  if (cl && cl.email) clRows += '<tr><td style="font-size:11px;color:#888;padding:3px 14px">Email</td><td style="font-size:11px;color:#333;padding:3px 14px">' + cl.email + '</td></tr>';
+  if (cl && cl.piva)  clRows += '<tr><td style="font-size:11px;color:#888;padding:3px 14px">P.IVA</td><td style="font-size:11px;color:#333;padding:3px 14px">' + cl.piva + '</td></tr>';
+  if (cl && cl.citta) clRows += '<tr><td style="font-size:11px;color:#888;padding:3px 14px">Città</td><td style="font-size:11px;color:#333;padding:3px 14px">' + cl.citta + '</td></tr>';
+
+  // Tabella a due colonne: Riferimenti | Cliente
+  html += '<table style="width:100%;border-collapse:collapse;margin-bottom:18px">';
   html += '<tr style="vertical-align:top">';
 
-  // RIFERIMENTI
-  html += '<td style="width:50%;border:1px solid #dde3ee;border-radius:8px;overflow:hidden;padding:0">';
-  html += '<div style="' + headerStyle + ';border-radius:7px 7px 0 0">Riferimenti documento</div>';
-  html += '<table style="width:100%;border-collapse:collapse;background:#f8f9fb">';
-  html += '<tr style="' + rowStyle + '"><td style="' + tdStyle + 'width:45%">Stato</td><td style="' + tdValStyle + '">' + statoLabel + '</td></tr>';
-  html += '<tr style="' + rowStyle + '"><td style="' + tdStyle + '">Data intervento</td><td style="' + tdValStyle + '">' + fmtD(intervento.data) + '</td></tr>';
-  if (intervento.rapportino_num) html += '<tr style="' + rowStyle + '"><td style="' + tdStyle + '">Rapportino N.</td><td style="' + tdValStyle + '">' + intervento.rapportino_num + (intervento.rapportino_data ? ' del ' + fmtD(intervento.rapportino_data) : '') + '</td></tr>';
-  if (intervento.offerta_num)    html += '<tr style="' + rowStyle + '"><td style="' + tdStyle + '">Ns. Offerta N.</td><td style="' + tdValStyle + '">' + intervento.offerta_num + '</td></tr>';
-  if (intervento.ordine_num)     html += '<tr><td style="' + tdStyle + '">Ordine Cliente N.</td><td style="' + tdValStyle + '">' + intervento.ordine_num + (intervento.ordine_data ? ' del ' + fmtD(intervento.ordine_data) : '') + '</td></tr>';
+  // Cella RIFERIMENTI
+  html += '<td style="width:48%;padding-right:8px;vertical-align:top">';
+  html += '<table style="width:100%;border-collapse:collapse;border:1px solid #dde3ee">';
+  html += '<tr><td colspan="2" style="' + headerStyle + ';padding:7px 12px">Riferimenti documento</td></tr>';
+  html += '<tr style="' + rowStyle + '"><td style="' + tdStyle + 'width:45%;background:#f8f9fb">Stato</td><td style="' + tdValStyle + ';background:#f8f9fb">' + statoLabel + '</td></tr>';
+  html += '<tr style="' + rowStyle + '"><td style="' + tdStyle + 'background:#f8f9fb">Data intervento</td><td style="' + tdValStyle + ';background:#f8f9fb">' + fmtD(intervento.data) + '</td></tr>';
+  if (intervento.rapportino_num) html += '<tr style="' + rowStyle + '"><td style="' + tdStyle + 'background:#f8f9fb">Rapportino N.</td><td style="' + tdValStyle + ';background:#f8f9fb">' + intervento.rapportino_num + (intervento.rapportino_data ? ' del ' + fmtD(intervento.rapportino_data) : '') + '</td></tr>';
+  if (intervento.offerta_num)    html += '<tr style="' + rowStyle + '"><td style="' + tdStyle + 'background:#f8f9fb">Ns. Offerta N.</td><td style="' + tdValStyle + ';background:#f8f9fb">' + intervento.offerta_num + '</td></tr>';
+  if (intervento.ordine_num)     html += '<tr><td style="' + tdStyle + 'background:#f8f9fb">Ordine Cliente N.</td><td style="' + tdValStyle + ';background:#f8f9fb">' + intervento.ordine_num + (intervento.ordine_data ? ' del ' + fmtD(intervento.ordine_data) : '') + '</td></tr>';
   html += '</table></td>';
 
-  // CLIENTE
-  html += '<td style="width:50%;border:1px solid #dde3ee;border-radius:8px;overflow:hidden;padding:0">';
-  html += '<div style="' + headerStyle + ';border-radius:7px 7px 0 0">Cliente</div>';
-  html += '<div style="background:#f8f9fb;padding:12px 14px">';
-  html += '<div style="font-size:13px;font-weight:700;color:#1a1a2e;margin-bottom:8px">' + clNome + '</div>';
-  if (cl && cl.indirizzo_completo) html += '<div style="font-size:11px;color:#444;margin-bottom:4px">Indirizzo: ' + cl.indirizzo_completo + '</div>';
-  if (cl && cl.ref)   html += '<div style="font-size:11px;color:#444;margin-bottom:4px">Referente: ' + cl.ref + '</div>';
-  if (cl && cl.tel)   html += '<div style="font-size:11px;color:#444;margin-bottom:4px">Tel: ' + cl.tel + '</div>';
-  if (cl && cl.email) html += '<div style="font-size:11px;color:#444;margin-bottom:4px">Email: ' + cl.email + '</div>';
-  if (cl && cl.piva)  html += '<div style="font-size:11px;color:#444;margin-bottom:4px">P.IVA: ' + cl.piva + '</div>';
-  if (cl && cl.citta) html += '<div style="font-size:11px;color:#444">Citta: ' + cl.citta + '</div>';
-  html += '</div></td>';
+  // Cella CLIENTE
+  html += '<td style="width:48%;padding-left:8px;vertical-align:top">';
+  html += '<table style="width:100%;border-collapse:collapse;border:1px solid #dde3ee">';
+  html += '<tr><td colspan="2" style="' + headerStyle + ';padding:7px 12px">Dati cliente</td></tr>';
+  html += clRows;
+  html += '</table></td>';
+
   html += '</tr></table>';
 
   // ORE LAVORO
