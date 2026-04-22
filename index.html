@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+><!DOCTYPE html>
 <html lang="it">
 <head>
 <meta charset="UTF-8">
@@ -571,9 +571,32 @@ async function writeHeadersIfEmpty() {
 }
 
 // ─── SYNC ─────────────────────────────────────────────────────────────────────
+// ─── TOKEN REFRESH ────────────────────────────────────────────────────────────
+async function refreshTokenIfNeeded() {
+  const tokenTime = parseInt(localStorage.getItem('td_token_time') || '0');
+  const elapsed = Date.now() - tokenTime;
+  if (elapsed > 50 * 60 * 1000) {
+    return new Promise((resolve) => {
+      const tc = google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID, scope: SCOPES, prompt: '',
+        callback: (resp) => {
+          if (!resp.error) {
+            localStorage.setItem('td_token', resp.access_token);
+            localStorage.setItem('td_token_time', Date.now().toString());
+            gapi.client.setToken({ access_token: resp.access_token });
+          }
+          resolve();
+        }
+      });
+      tc.requestAccessToken({ prompt: '' });
+    });
+  }
+}
+
 async function syncAll() {
   setSyncStatus('syncing', 'Sincronizzazione...');
   try {
+    await refreshTokenIfNeeded();
     const [r1, r2] = await Promise.all([
       gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Interventi!A2:S' }),
       gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Clienti!A2:H' }),
@@ -719,7 +742,8 @@ function closeModal(id, force=false) {
   if (!force && modalDirty && id === 'modal-intervento') {
     if (!confirm('Hai modifiche non salvate. Vuoi davvero chiudere?')) return;
   }
-  document.getElementById(id).classList.remove('open');
+  const el = document.getElementById(id);
+  if (el) el.classList.remove('open');
   if (id === 'modal-intervento') modalDirty = false;
 }
 
@@ -743,7 +767,7 @@ function renderDashboard() {
   document.getElementById('stat-toinvoice').textContent=interventi.filter(i=>i.stato_fattura==='emettere').length;
   const rec=interventi.filter(i=>i.stato==='aperto'||i.stato==='in-corso').sort((a,b)=>new Date(b.data)-new Date(a.data)).slice(0,5);
   document.getElementById('dash-tbody').innerHTML=rec.length
-    ?rec.map(i=>`<tr onclick="openDetail('${i.id}')"><td class="td-id">#${i.id}</td><td>${i.titolo}</td><td>${getClientName(i.cliente)}</td><td>${statoInterventoBadge(i.stato)}</td><td>${formatOre(parseFloat(i.ore_totali||0))}</td><td>${i.data||'—'}</td></tr>`).join('')
+    ?rec.map(i=>`<tr onclick="openDetail('${i.id}')"><td class="td-id">#${i.id}</td><td>${i.titolo}</td><td>${getClientName(i.cliente)}</td><td>${statoInterventoBadge(i.stato)}</td><td>${formatOre(parseFloat(i.ore_totali||0))}</td><td>${fmtDataIT(i.data)||'—'}</td></tr>`).join('')
     :'<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--muted)">Nessun intervento aperto</td></tr>';
 }
 
@@ -752,7 +776,7 @@ function renderTable() {
   const anno=document.getElementById('interventi-year-filter')?.value||'tutti';
   const list=interventi.filter(i=>(currentFilter==='tutti'||i.stato===currentFilter)&&(anno==='tutti'||(i.data&&i.data.split('-')[0]===anno))&&(!search||i.titolo.toLowerCase().includes(search)||getClientName(i.cliente).toLowerCase().includes(search)||(i.offerta_num||'').toLowerCase().includes(search)||(i.ordine_num||'').toLowerCase().includes(search)));
   document.getElementById('main-tbody').innerHTML=list.length
-    ?list.map(i=>`<tr onclick="openDetail('${i.id}')"><td>${i.offerta_num||'—'}</td><td><strong>${i.titolo}</strong><br><small style="color:var(--muted)">${i.indirizzo||''}</small></td><td>${getClientName(i.cliente)}</td><td>${statoInterventoBadge(i.stato)}</td><td>${formatOre(parseFloat(i.ore_totali||0))}</td><td>${i.data||'—'}</td><td>${statoFatturaBadge(i.stato_fattura)}</td><td><button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openEditIntervento('${i.id}')">✏️</button></td></tr>`).join('')
+    ?list.map(i=>`<tr onclick="openDetail('${i.id}')"><td>${i.offerta_num||'—'}</td><td><strong>${i.titolo}</strong><br><small style="color:var(--muted)">${i.indirizzo||''}</small></td><td>${getClientName(i.cliente)}</td><td>${statoInterventoBadge(i.stato)}</td><td>${formatOre(parseFloat(i.ore_totali||0))}</td><td>${fmtDataIT(i.data)||'—'}</td><td>${statoFatturaBadge(i.stato_fattura)}</td><td><button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openEditIntervento('${i.id}')">✏️</button></td></tr>`).join('')
     :'<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--muted)">Nessun intervento trovato</td></tr>';
 }
 
@@ -866,6 +890,11 @@ function openEditIntervento(id) {
   renderHoursList();
   document.getElementById('f_cliente').innerHTML='<option value="">— Seleziona —</option>'+clienti.map(c=>`<option value="${c.id}"${c.id===i.cliente?' selected':''}>${c.nome}</option>`).join('');
   renderFilePreview();
+  document.getElementById('f_stato').onchange = function() {
+    if (this.value !== 'chiuso') {
+      document.getElementById('f_stato_fattura').value = '';
+    }
+  };
   modalDirty = false;
   setTimeout(() => {
     document.querySelectorAll('#modal-intervento .form-control').forEach(el => {
@@ -951,6 +980,7 @@ async function saveIntervento() {
   };
 
   try {
+    await refreshTokenIfNeeded();
     const id=editingId||genId('I');
     const row=interventoToRow(id,d);
     if(editingId) await updateSheetRow('Interventi',editingId,row,'S');
@@ -960,7 +990,12 @@ async function saveIntervento() {
     closeModal('modal-intervento', true);
     showToast(editingId?'Intervento aggiornato ✓':'Intervento creato ✓');
     editingId=null;
-  } catch(e){showToast('Errore salvataggio','error');setSyncStatus('error','Errore');console.error(e);}
+  } catch(e){
+    console.error('saveIntervento error:', e);
+    const msg = (e&&e.result&&e.result.error&&e.result.error.message) || (e&&e.message) || JSON.stringify(e);
+    if(e&&e.status===401){showToast('Sessione scaduta — premi Riconnetti','error');setSyncStatus('error','Sessione scaduta');}
+    else{showToast('Errore: '+msg,'error');setSyncStatus('error','Errore');}
+  }
   btn.disabled=false; btn.textContent='Salva';
 }
 
@@ -1040,7 +1075,7 @@ function openEditCliente(id) {
     const btn=document.getElementById('save_cliente_btn');
     btn.disabled=true; btn.textContent='Salvataggio...';
     setSyncStatus('syncing','Salvataggio...');
-    const d={nome,ref:document.getElementById('c_ref').value,tel:document.getElementById('c_tel').value,email:document.getElementById('c_email').value,citta:document.getElementById('c_citta').value};
+    const d={nome,ref:document.getElementById('c_ref').value,tel:document.getElementById('c_tel').value,email:document.getElementById('c_email').value,citta:document.getElementById('c_citta').value,piva:document.getElementById('c_piva').value,indirizzo_completo:document.getElementById('c_indirizzo').value};
     try{
       await updateSheetRow('Clienti',id,clienteToRow(id,d),'H');
       await syncAll();closeModal('modal-cliente');showToast('Cliente aggiornato ✓');
@@ -1061,6 +1096,7 @@ async function saveCliente() {
   const id=genId('C');
   const d={nome,ref:document.getElementById('c_ref').value,tel:document.getElementById('c_tel').value,email:document.getElementById('c_email').value,citta:document.getElementById('c_citta').value,piva:document.getElementById('c_piva').value,indirizzo_completo:document.getElementById('c_indirizzo').value};
   try{
+    await refreshTokenIfNeeded();
     await appendRow('Clienti',clienteToRow(id,d));
     await syncAll();closeModal('modal-cliente');showToast('Cliente aggiunto ✓');
   }catch(e){showToast('Errore salvataggio','error');setSyncStatus('error','Errore');}
