@@ -1250,6 +1250,7 @@ let isDrawing = false;
 let lastX = 0, lastY = 0;
 
 function openSignatureModal(intervento) {
+  closeModal('modal-detail', true); // chiudi dettaglio prima del PDF
   pdfSignatures = { tecnico: null, cliente: null };
   const sigModal = document.getElementById('modal-signature');
   if (!sigModal) {
@@ -1506,13 +1507,21 @@ function exportToPDF(intervento) {
   const nomePulito = clNome.replace(/[^a-zA-Z0-9\s]/g,'').replace(/\s+/g,'_').substring(0,30);
   const dataFile = fmtD(intervento.data).replace(/\//g,'-');
 
+  // Crea elemento temporaneo fuori schermo per html2pdf
+  const pdfEl = document.createElement('div');
+  pdfEl.style.cssText = 'position:absolute;left:-9999px;top:0;width:794px;background:#fff';
+  pdfEl.innerHTML = h;
+  document.body.appendChild(pdfEl);
+
   html2pdf().set({
     margin: 0,
     filename: 'intervento_' + nomePulito + '_' + dataFile + '.pdf',
     image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true, allowTaint: true, logging: false },
+    html2canvas: { scale: 2, useCORS: true, allowTaint: true, logging: false, width: 794 },
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-  }).from(h).save();
+  }).from(pdfEl).save().then(() => {
+    document.body.removeChild(pdfEl);
+  });
   showToast('PDF generato!');
 }
 
