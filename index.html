@@ -1413,37 +1413,41 @@ function exportToPDF(intervento) {
   html += '<div style="padding:20px 32px">';
 
   // RIQUADRI RIFERIMENTI + CLIENTE
-  // Costruiamo le righe cliente separatamente
-  let clRows = '';
-  clRows += '<tr><td style="font-size:12px;font-weight:700;color:#1a1a2e;padding:8px 14px 4px 14px" colspan="2">' + clNome + '</td></tr>';
-  if (cl && cl.indirizzo_completo) clRows += '<tr><td style="font-size:11px;color:#888;padding:3px 14px;width:38%">Indirizzo</td><td style="font-size:11px;color:#333;padding:3px 14px">' + cl.indirizzo_completo + '</td></tr>';
-  if (cl && cl.ref)   clRows += '<tr><td style="font-size:11px;color:#888;padding:3px 14px">Referente</td><td style="font-size:11px;color:#333;padding:3px 14px">' + cl.ref + '</td></tr>';
-  if (cl && cl.tel)   clRows += '<tr><td style="font-size:11px;color:#888;padding:3px 14px">Telefono</td><td style="font-size:11px;color:#333;padding:3px 14px">' + cl.tel + '</td></tr>';
-  if (cl && cl.email) clRows += '<tr><td style="font-size:11px;color:#888;padding:3px 14px">Email</td><td style="font-size:11px;color:#333;padding:3px 14px">' + cl.email + '</td></tr>';
-  if (cl && cl.piva)  clRows += '<tr><td style="font-size:11px;color:#888;padding:3px 14px">P.IVA</td><td style="font-size:11px;color:#333;padding:3px 14px">' + cl.piva + '</td></tr>';
-  if (cl && cl.citta) clRows += '<tr><td style="font-size:11px;color:#888;padding:3px 14px">Città</td><td style="font-size:11px;color:#333;padding:3px 14px">' + cl.citta + '</td></tr>';
+  // Usiamo una tabella con colonne fisse per garantire la simmetria in html2pdf
+  const tdCell = 'width:50%;vertical-align:top;padding:0';
+  const innerTbl = 'width:100%;border-collapse:collapse;border:1px solid #c8d4e8';
+  const thCell = headerStyle + ';padding:8px 12px';
+  const labelCell = 'font-size:11px;color:#888;padding:5px 12px;background:#f4f7fb;width:42%;border-bottom:1px solid #e4eaf4';
+  const valCell = 'font-size:11px;font-weight:600;color:#1a1a2e;padding:5px 12px;background:#f4f7fb;border-bottom:1px solid #e4eaf4';
 
-  // Tabella a due colonne: Riferimenti | Cliente
-  html += '<table style="width:100%;border-collapse:collapse;margin-bottom:18px">';
-  html += '<tr style="vertical-align:top">';
+  html += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:18px;border-collapse:collapse">';
+  html += '<tr>';
 
-  // Cella RIFERIMENTI
-  html += '<td style="width:48%;padding-right:8px;vertical-align:top">';
-  html += '<table style="width:100%;border-collapse:collapse;border:1px solid #dde3ee">';
-  html += '<tr><td colspan="2" style="' + headerStyle + ';padding:7px 12px">Riferimenti documento</td></tr>';
-  html += '<tr style="' + rowStyle + '"><td style="' + tdStyle + 'width:45%;background:#f8f9fb">Stato</td><td style="' + tdValStyle + ';background:#f8f9fb">' + statoLabel + '</td></tr>';
-  html += '<tr style="' + rowStyle + '"><td style="' + tdStyle + 'background:#f8f9fb">Data intervento</td><td style="' + tdValStyle + ';background:#f8f9fb">' + fmtD(intervento.data) + '</td></tr>';
-  if (intervento.rapportino_num) html += '<tr style="' + rowStyle + '"><td style="' + tdStyle + 'background:#f8f9fb">Rapportino N.</td><td style="' + tdValStyle + ';background:#f8f9fb">' + intervento.rapportino_num + (intervento.rapportino_data ? ' del ' + fmtD(intervento.rapportino_data) : '') + '</td></tr>';
-  if (intervento.offerta_num)    html += '<tr style="' + rowStyle + '"><td style="' + tdStyle + 'background:#f8f9fb">Ns. Offerta N.</td><td style="' + tdValStyle + ';background:#f8f9fb">' + intervento.offerta_num + '</td></tr>';
-  if (intervento.ordine_num)     html += '<tr><td style="' + tdStyle + 'background:#f8f9fb">Ordine Cliente N.</td><td style="' + tdValStyle + ';background:#f8f9fb">' + intervento.ordine_num + (intervento.ordine_data ? ' del ' + fmtD(intervento.ordine_data) : '') + '</td></tr>';
-  html += '</table></td>';
+  // ── RIFERIMENTI (colonna sinistra) ──
+  html += '<td style="' + tdCell + ';padding-right:6px">';
+  html += '<table width="100%" cellpadding="0" cellspacing="0" style="' + innerTbl + '">';
+  html += '<tr><td colspan="2" style="' + thCell + '">Riferimenti documento</td></tr>';
+  html += '<tr><td style="' + labelCell + '">Stato</td><td style="' + valCell + '">' + statoLabel + '</td></tr>';
+  html += '<tr><td style="' + labelCell + '">Data intervento</td><td style="' + valCell + '">' + fmtD(intervento.data) + '</td></tr>';
+  if (intervento.rapportino_num) html += '<tr><td style="' + labelCell + '">Rapportino N.</td><td style="' + valCell + '">' + intervento.rapportino_num + (intervento.rapportino_data ? ' del ' + fmtD(intervento.rapportino_data) : '') + '</td></tr>';
+  if (intervento.offerta_num)    html += '<tr><td style="' + labelCell + '">Ns. Offerta N.</td><td style="' + valCell + '">' + intervento.offerta_num + '</td></tr>';
+  if (intervento.ordine_num)     html += '<tr><td style="' + labelCell + '">Ordine Cliente N.</td><td style="' + valCell + '">' + intervento.ordine_num + (intervento.ordine_data ? ' del ' + fmtD(intervento.ordine_data) : '') + '</td></tr>';
+  html += '</table>';
+  html += '</td>';
 
-  // Cella CLIENTE
-  html += '<td style="width:48%;padding-left:8px;vertical-align:top">';
-  html += '<table style="width:100%;border-collapse:collapse;border:1px solid #dde3ee">';
-  html += '<tr><td colspan="2" style="' + headerStyle + ';padding:7px 12px">Dati cliente</td></tr>';
-  html += clRows;
-  html += '</table></td>';
+  // ── DATI CLIENTE (colonna destra) ──
+  html += '<td style="' + tdCell + ';padding-left:6px">';
+  html += '<table width="100%" cellpadding="0" cellspacing="0" style="' + innerTbl + '">';
+  html += '<tr><td colspan="2" style="' + thCell + '">Dati cliente</td></tr>';
+  html += '<tr><td style="' + labelCell + '">Ragione sociale</td><td style="' + valCell + '">' + clNome + '</td></tr>';
+  if (cl && cl.indirizzo_completo) html += '<tr><td style="' + labelCell + '">Indirizzo</td><td style="' + valCell + '">' + cl.indirizzo_completo + '</td></tr>';
+  if (cl && cl.ref)   html += '<tr><td style="' + labelCell + '">Referente</td><td style="' + valCell + '">' + cl.ref + '</td></tr>';
+  if (cl && cl.tel)   html += '<tr><td style="' + labelCell + '">Telefono</td><td style="' + valCell + '">' + cl.tel + '</td></tr>';
+  if (cl && cl.email) html += '<tr><td style="' + labelCell + '">Email</td><td style="' + valCell + '">' + cl.email + '</td></tr>';
+  if (cl && cl.piva)  html += '<tr><td style="' + labelCell + '">P.IVA</td><td style="' + valCell + '">' + cl.piva + '</td></tr>';
+  if (cl && cl.citta) html += '<tr><td style="' + labelCell + '">Città</td><td style="' + valCell + '">' + cl.citta + '</td></tr>';
+  html += '</table>';
+  html += '</td>';
 
   html += '</tr></table>';
 
@@ -1509,7 +1513,7 @@ function exportToPDF(intervento) {
 
   html2pdf().set({
     margin: 0,
-    filename: `intervento_${intervento.id}_${fmtD(intervento.data).replace(/\//g,'-')}.pdf`,
+    filename: ('intervento_' + clNome.replace(/[^a-zA-Z0-9\s]/g,'').replace(/\s+/g,'_').substring(0,30) + '_' + fmtD(intervento.data).replace(/\//g,'-') + '.pdf'),
     image: { type: 'jpeg', quality: 0.98 },
     html2canvas: { scale: 2, useCORS: true, allowTaint: true },
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
