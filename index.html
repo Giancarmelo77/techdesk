@@ -1413,41 +1413,54 @@ function exportToPDF(intervento) {
   html += '<div style="padding:20px 32px">';
 
   // RIQUADRI RIFERIMENTI + CLIENTE
-  // Usiamo una tabella con colonne fisse per garantire la simmetria in html2pdf
-  const tdCell = 'width:50%;vertical-align:top;padding:0';
-  const innerTbl = 'width:100%;border-collapse:collapse;border:1px solid #c8d4e8';
-  const thCell = headerStyle + ';padding:8px 12px';
-  const labelCell = 'font-size:11px;color:#888;padding:5px 12px;background:#f4f7fb;width:42%;border-bottom:1px solid #e4eaf4';
-  const valCell = 'font-size:11px;font-weight:600;color:#1a1a2e;padding:5px 12px;background:#f4f7fb;border-bottom:1px solid #e4eaf4';
+  // Strategia: unica tabella con righe a 4 celle (label-sx | val-sx | label-dx | val-dx)
+  // E' il modo più affidabile per avere due colonne in html2pdf
 
-  html += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:18px;border-collapse:collapse">';
+  const lh = headerStyle + ';padding:8px 12px;font-size:10px'; // header style
+  const lc = 'font-size:10px;color:#888;padding:5px 10px;background:#f4f7fb;border-bottom:1px solid #e8edf4;border-right:1px solid #e8edf4;white-space:nowrap';
+  const vc = 'font-size:10px;font-weight:600;color:#1a1a2e;padding:5px 10px;background:#f4f7fb;border-bottom:1px solid #e8edf4;border-right:1px solid #dde3ee';
+  const lc2 = 'font-size:10px;color:#888;padding:5px 10px;background:#f4f7fb;border-bottom:1px solid #e8edf4;border-left:1px solid #dde3ee;white-space:nowrap';
+  const vc2 = 'font-size:10px;font-weight:600;color:#1a1a2e;padding:5px 10px;background:#f4f7fb;border-bottom:1px solid #e8edf4';
+
+  // Costruiamo array di righe per ciascun riquadro
+  const rifRows = [];
+  rifRows.push(['Stato', statoLabel]);
+  rifRows.push(['Data intervento', fmtD(intervento.data)]);
+  if (intervento.rapportino_num) rifRows.push(['Rapportino N.', intervento.rapportino_num + (intervento.rapportino_data ? ' del ' + fmtD(intervento.rapportino_data) : '')]);
+  if (intervento.offerta_num)    rifRows.push(['Ns. Offerta N.', intervento.offerta_num]);
+  if (intervento.ordine_num)     rifRows.push(['Ordine Cliente N.', intervento.ordine_num + (intervento.ordine_data ? ' del ' + fmtD(intervento.ordine_data) : '')]);
+
+  const cliRows = [];
+  cliRows.push(['Ragione sociale', clNome]);
+  if (cl && cl.indirizzo_completo) cliRows.push(['Indirizzo', cl.indirizzo_completo]);
+  if (cl && cl.ref)   cliRows.push(['Referente', cl.ref]);
+  if (cl && cl.tel)   cliRows.push(['Telefono', cl.tel]);
+  if (cl && cl.email) cliRows.push(['Email', cl.email]);
+  if (cl && cl.piva)  cliRows.push(['P.IVA', cl.piva]);
+  if (cl && cl.citta) cliRows.push(['Citta', cl.citta]);
+
+  const maxRows = Math.max(rifRows.length, cliRows.length);
+
+  html += '<table width="100%" cellpadding="0" cellspacing="8" style="border-collapse:separate;margin-bottom:18px">';
   html += '<tr>';
 
-  // ── RIFERIMENTI (colonna sinistra) ──
-  html += '<td style="' + tdCell + ';padding-right:6px">';
-  html += '<table width="100%" cellpadding="0" cellspacing="0" style="' + innerTbl + '">';
-  html += '<tr><td colspan="2" style="' + thCell + '">Riferimenti documento</td></tr>';
-  html += '<tr><td style="' + labelCell + '">Stato</td><td style="' + valCell + '">' + statoLabel + '</td></tr>';
-  html += '<tr><td style="' + labelCell + '">Data intervento</td><td style="' + valCell + '">' + fmtD(intervento.data) + '</td></tr>';
-  if (intervento.rapportino_num) html += '<tr><td style="' + labelCell + '">Rapportino N.</td><td style="' + valCell + '">' + intervento.rapportino_num + (intervento.rapportino_data ? ' del ' + fmtD(intervento.rapportino_data) : '') + '</td></tr>';
-  if (intervento.offerta_num)    html += '<tr><td style="' + labelCell + '">Ns. Offerta N.</td><td style="' + valCell + '">' + intervento.offerta_num + '</td></tr>';
-  if (intervento.ordine_num)     html += '<tr><td style="' + labelCell + '">Ordine Cliente N.</td><td style="' + valCell + '">' + intervento.ordine_num + (intervento.ordine_data ? ' del ' + fmtD(intervento.ordine_data) : '') + '</td></tr>';
-  html += '</table>';
-  html += '</td>';
+  // Tabella sinistra - RIFERIMENTI
+  html += '<td valign="top">';
+  html += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #c8d4e8">';
+  html += '<tr><td colspan="2" style="' + lh + '">Riferimenti documento</td></tr>';
+  for (let r of rifRows) {
+    html += '<tr><td style="' + lc + '">' + r[0] + '</td><td style="' + vc + '">' + r[1] + '</td></tr>';
+  }
+  html += '</table></td>';
 
-  // ── DATI CLIENTE (colonna destra) ──
-  html += '<td style="' + tdCell + ';padding-left:6px">';
-  html += '<table width="100%" cellpadding="0" cellspacing="0" style="' + innerTbl + '">';
-  html += '<tr><td colspan="2" style="' + thCell + '">Dati cliente</td></tr>';
-  html += '<tr><td style="' + labelCell + '">Ragione sociale</td><td style="' + valCell + '">' + clNome + '</td></tr>';
-  if (cl && cl.indirizzo_completo) html += '<tr><td style="' + labelCell + '">Indirizzo</td><td style="' + valCell + '">' + cl.indirizzo_completo + '</td></tr>';
-  if (cl && cl.ref)   html += '<tr><td style="' + labelCell + '">Referente</td><td style="' + valCell + '">' + cl.ref + '</td></tr>';
-  if (cl && cl.tel)   html += '<tr><td style="' + labelCell + '">Telefono</td><td style="' + valCell + '">' + cl.tel + '</td></tr>';
-  if (cl && cl.email) html += '<tr><td style="' + labelCell + '">Email</td><td style="' + valCell + '">' + cl.email + '</td></tr>';
-  if (cl && cl.piva)  html += '<tr><td style="' + labelCell + '">P.IVA</td><td style="' + valCell + '">' + cl.piva + '</td></tr>';
-  if (cl && cl.citta) html += '<tr><td style="' + labelCell + '">Città</td><td style="' + valCell + '">' + cl.citta + '</td></tr>';
-  html += '</table>';
-  html += '</td>';
+  // Tabella destra - CLIENTE
+  html += '<td valign="top">';
+  html += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #c8d4e8">';
+  html += '<tr><td colspan="2" style="' + lh + '">Dati cliente</td></tr>';
+  for (let r of cliRows) {
+    html += '<tr><td style="' + lc + '">' + r[0] + '</td><td style="' + vc + '">' + r[1] + '</td></tr>';
+  }
+  html += '</table></td>';
 
   html += '</tr></table>';
 
