@@ -1507,21 +1507,16 @@ function exportToPDF(intervento) {
   const nomePulito = clNome.replace(/[^a-zA-Z0-9\s]/g,'').replace(/\s+/g,'_').substring(0,30);
   const dataFile = fmtD(intervento.data).replace(/\//g,'-');
 
-  // Crea elemento temporaneo fuori schermo per html2pdf
-  const pdfEl = document.createElement('div');
-  pdfEl.style.cssText = 'position:absolute;left:-9999px;top:0;width:794px;background:#fff';
-  pdfEl.innerHTML = h;
-  document.body.appendChild(pdfEl);
+  // Wrappa l'html in un div con font esplicito per html2pdf
+  const fullHtml = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:13px;background:#ffffff;color:#000000">' + h + '</div>';
 
   html2pdf().set({
-    margin: 0,
+    margin: [8, 8, 8, 8],
     filename: 'intervento_' + nomePulito + '_' + dataFile + '.pdf',
     image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true, allowTaint: true, logging: false, width: 794 },
+    html2canvas: { scale: 2, useCORS: true, allowTaint: true, logging: false },
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-  }).from(pdfEl).save().then(() => {
-    document.body.removeChild(pdfEl);
-  });
+  }).from(fullHtml).save();
   showToast('PDF generato!');
 }
 
