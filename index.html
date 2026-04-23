@@ -1441,11 +1441,11 @@ function exportToPDF(intervento) {
 
   const maxRows = Math.max(rifRows.length, cliRows.length);
 
-  html += '<table width="100%" cellpadding="0" cellspacing="8" style="border-collapse:separate;margin-bottom:18px">';
+  html += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;margin-bottom:18px">';
   html += '<tr>';
 
   // Tabella sinistra - RIFERIMENTI
-  html += '<td valign="top">';
+  html += '<td valign="top" style="padding-left:6px">';
   html += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #c8d4e8">';
   html += '<tr><td colspan="2" style="' + lh + '">Riferimenti documento</td></tr>';
   for (let r of rifRows) {
@@ -1454,7 +1454,7 @@ function exportToPDF(intervento) {
   html += '</table></td>';
 
   // Tabella destra - CLIENTE
-  html += '<td valign="top">';
+  html += '<td valign="top" style="padding-right:6px">';
   html += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #c8d4e8">';
   html += '<tr><td colspan="2" style="' + lh + '">Dati cliente</td></tr>';
   for (let r of cliRows) {
