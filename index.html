@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tekno Automazione — Gestione Interventi</title>
+<meta name="theme-color" content="#1a3a6e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <style>
@@ -142,6 +146,9 @@
     .filters{flex-direction:column;align-items:stretch}
     .search-input,.year-select{width:100%}
   }
+  /* OFFLINE */
+  .offline-banner{display:none;position:fixed;bottom:0;left:0;right:0;z-index:9000;background:#f09050;color:#fff;padding:10px 20px;font-size:13px;font-weight:700;text-align:center;font-family:var(--mono)}
+  .offline-banner.visible{display:block}
 </style>
 </head>
 <body>
@@ -269,6 +276,11 @@
       <div class="client-cards" id="client-grid"></div>
     </div>
   </div>
+</div>
+
+<!-- BANNER OFFLINE -->
+<div class="offline-banner" id="offline-banner">
+  📡 Sei offline — Le modifiche vengono salvate localmente e sincronizzate appena torni online
 </div>
 
 <!-- MODAL INTERVENTO -->
@@ -485,6 +497,14 @@ function requestAuth() { requestAuthExplicit(); }
 
 async function onSignedIn() {
   setSyncStatus('syncing', 'Connessione...');
+  // Se offline, carica subito dalla cache e poi prova a sync
+  if (!navigator.onLine) {
+    if (loadFromLocalCache()) {
+      hideLoading();
+      updateOfflineUI();
+      return;
+    }
+  }
   setLoading('Configurazione foglio...');
   await ensureSheets();
   setLoading('Configurazione cartella Drive...');
@@ -630,6 +650,8 @@ async function syncAll() {
     })).filter(c => c.id);
     renderAll();
     setSyncStatus('ok', 'Sincronizzato ✓');
+    cacheDataLocally(); // salva cache locale per uso offline
+    updateOfflineUI();
   } catch(e) {
     setSyncStatus('error', 'Errore sync');
     showToast('Errore di sincronizzazione', 'error');
@@ -997,9 +1019,17 @@ async function saveIntervento() {
     await refreshTokenIfNeeded();
     const id=editingId||genId('I');
     const row=interventoToRow(id,d);
+    // Aggiorna array locale immediatamente (anche offline)
+    if(editingId) {
+      const idx2=interventi.findIndex(x=>x.id===editingId);
+      if(idx2>=0) interventi[idx2]={id:editingId,...d};
+    } else {
+      interventi.unshift({id,...d});
+    }
+    renderAll();
     if(editingId) await updateSheetRow('Interventi',editingId,row,'S');
     else await appendRow('Interventi',row);
-    await syncAll();
+    if(isOnline) await syncAll();
     modalDirty = false;
     closeModal('modal-intervento', true);
     showToast(editingId?'Intervento aggiornato ✓':'Intervento creato ✓');
@@ -1059,8 +1089,13 @@ function openDetail(id) {
 async function deleteIntervento(id) {
   if(!confirm('Eliminare questo intervento?')) return;
   setSyncStatus('syncing','Eliminazione...');
-  try{await deleteSheetRow('Interventi',id);await syncAll();closeModal('modal-detail');showToast('Intervento eliminato');}
-  catch(e){showToast('Errore eliminazione','error');}
+  try{
+    interventi=interventi.filter(x=>x.id!==id);
+    renderAll();
+    await deleteSheetRow('Interventi',id);
+    if(isOnline) await syncAll();
+    closeModal('modal-detail');showToast('Intervento eliminato');
+  }catch(e){showToast('Errore eliminazione','error');}
 }
 
 // ─── CLIENTI CRUD ─────────────────────────────────────────────────────────────
@@ -1091,8 +1126,12 @@ function openEditCliente(id) {
     setSyncStatus('syncing','Salvataggio...');
     const d={nome,ref:document.getElementById('c_ref').value,tel:document.getElementById('c_tel').value,email:document.getElementById('c_email').value,citta:document.getElementById('c_citta').value,piva:document.getElementById('c_piva').value,indirizzo_completo:document.getElementById('c_indirizzo').value};
     try{
+      const ci2=clienti.findIndex(x=>x.id===id);
+      if(ci2>=0) clienti[ci2]={...clienti[ci2],...d};
+      renderClienti();
       await updateSheetRow('Clienti',id,clienteToRow(id,d),'H');
-      await syncAll();closeModal('modal-cliente');showToast('Cliente aggiornato ✓');
+      if(isOnline) await syncAll();
+      closeModal('modal-cliente');showToast('Cliente aggiornato ✓');
       document.getElementById('save_cliente_btn').onclick=saveCliente;
       document.getElementById('modal-cliente-title').textContent='Nuovo Cliente';
     }catch(e){showToast('Errore salvataggio','error');}
@@ -1111,8 +1150,11 @@ async function saveCliente() {
   const d={nome,ref:document.getElementById('c_ref').value,tel:document.getElementById('c_tel').value,email:document.getElementById('c_email').value,citta:document.getElementById('c_citta').value,piva:document.getElementById('c_piva').value,indirizzo_completo:document.getElementById('c_indirizzo').value};
   try{
     await refreshTokenIfNeeded();
+    clienti.push({id,...d});
+    renderClienti();
     await appendRow('Clienti',clienteToRow(id,d));
-    await syncAll();closeModal('modal-cliente');showToast('Cliente aggiunto ✓');
+    if(isOnline) await syncAll();
+    closeModal('modal-cliente');showToast('Cliente aggiunto ✓');
   }catch(e){showToast('Errore salvataggio','error');setSyncStatus('error','Errore');}
   btn.disabled=false; btn.textContent='Salva Cliente';
 }
@@ -1250,6 +1292,7 @@ let isDrawing = false;
 let lastX = 0, lastY = 0;
 
 function openSignatureModal(intervento) {
+  closeModal('modal-detail', true); // chiudi dettaglio prima del PDF
   pdfSignatures = { tecnico: null, cliente: null };
   const sigModal = document.getElementById('modal-signature');
   if (!sigModal) {
@@ -1353,204 +1396,306 @@ function confirmSignaturesAndPrint() {
 }
 
 function exportToPDF(intervento) {
-  const cl=getClient(intervento.cliente);
-  function fmtD(iso){if(!iso)return'—';const p=iso.split('-');return p.length!==3?iso:`${p[2]}/${p[1]}/${p[0]}`;}
-  const statoLabel={'aperto':'Aperto','in-corso':'In Corso','attesa-ordine':'Attesa Ordine','chiuso':'Chiuso'}[intervento.stato]||intervento.stato||'—';
-
-  // Pre-calcola righe Riferimenti (evita backtick annidati che rompono html2pdf)
-  const rowRapportino = intervento.rapportino_num
-    ? '<tr style="border-bottom:1px solid #e8edf5"><td style="font-size:11px;color:#888;padding:6px 14px">Rapportino N.</td><td style="font-size:11px;font-weight:600;color:#1a1a2e;padding:6px 14px">' + intervento.rapportino_num + (intervento.rapportino_data ? ' del ' + fmtD(intervento.rapportino_data) : '') + '</td></tr>' : '';
-  const rowOfferta = intervento.offerta_num
-    ? '<tr style="border-bottom:1px solid #e8edf5"><td style="font-size:11px;color:#888;padding:6px 14px">Ns. Offerta N.</td><td style="font-size:11px;font-weight:600;color:#1a1a2e;padding:6px 14px">' + intervento.offerta_num + '</td></tr>' : '';
-  const rowOrdine = intervento.ordine_num
-    ? '<tr><td style="font-size:11px;color:#888;padding:6px 14px">Ordine Cliente N.</td><td style="font-size:11px;font-weight:600;color:#1a1a2e;padding:6px 14px">' + intervento.ordine_num + (intervento.ordine_data ? ' del ' + fmtD(intervento.ordine_data) : '') + '</td></tr>' : '';
-
-  // Pre-calcola dati cliente
+  const cl = getClient(intervento.cliente);
+  function fmtD(iso) {
+    if (!iso) return '—';
+    const p = iso.split('-');
+    return p.length !== 3 ? iso : p[2] + '/' + p[1] + '/' + p[0];
+  }
+  const statoLabel = {'aperto':'Aperto','in-corso':'In Corso','attesa-ordine':'Attesa Ordine','chiuso':'Chiuso'}[intervento.stato] || intervento.stato || '—';
   const clNome = cl ? cl.nome : '—';
-  const clRef   = cl&&cl.ref   ? '<div style="font-size:11px;color:#444;margin-bottom:4px">&#128100; ' + cl.ref + '</div>' : '';
-  const clTel   = cl&&cl.tel   ? '<div style="font-size:11px;color:#444;margin-bottom:4px">&#128222; ' + cl.tel + '</div>' : '';
-  const clEmail = cl&&cl.email ? '<div style="font-size:11px;color:#444;margin-bottom:4px">&#9993; ' + cl.email + '</div>' : '';
-  const clCitta = cl&&cl.citta ? '<div style="font-size:11px;color:#444;margin-bottom:4px">&#128205; ' + cl.citta + '</div>' : '';
-  const clPiva  = cl&&cl.piva  ? '<div style="font-size:11px;color:#444;margin-bottom:4px"><b>P.IVA:</b> ' + cl.piva + '</div>' : '';
-  const clIndirizzo = cl&&cl.indirizzo_completo ? '<div style="font-size:11px;color:#444;margin-bottom:4px">&#127968; ' + cl.indirizzo_completo + '</div>' : '';
 
-  let oreRows='';
-  if(intervento.ore_entries&&intervento.ore_entries.length){
-    oreRows=intervento.ore_entries.map((e,idx)=>`<tr style="border-bottom:1px solid #e5e7eb"><td style="padding:6px 10px;font-size:12px">${idx+1}</td><td style="padding:6px 10px;font-size:12px">${e.data?fmtDataIT(e.data):''}</td><td style="padding:6px 10px;font-size:12px">${e.dalle||'—'}</td><td style="padding:6px 10px;font-size:12px">${e.alle||'—'}</td><td style="padding:6px 10px;font-size:12px">${e.pausa||0} min</td><td style="padding:6px 10px;font-size:12px;font-weight:600">${formatOre(calcolaOreDaEntry(e))}</td></tr>`).join('');
-  }else oreRows=`<tr><td colspan="6" style="padding:10px;font-size:12px;color:#888">Nessuna fascia oraria</td></tr>`;
+  // Ore rows
+  let oreRows = '';
+  if (intervento.ore_entries && intervento.ore_entries.length) {
+    intervento.ore_entries.forEach((e, idx) => {
+      oreRows += '<tr bgcolor="#ffffff">' +
+        '<td style="padding:5px 8px;font-size:11px;border-bottom:1px solid #e5e7eb">' + (idx+1) + '</td>' +
+        '<td style="padding:5px 8px;font-size:11px;border-bottom:1px solid #e5e7eb">' + (e.data ? fmtDataIT(e.data) : '') + '</td>' +
+        '<td style="padding:5px 8px;font-size:11px;border-bottom:1px solid #e5e7eb">' + (e.dalle||'—') + '</td>' +
+        '<td style="padding:5px 8px;font-size:11px;border-bottom:1px solid #e5e7eb">' + (e.alle||'—') + '</td>' +
+        '<td style="padding:5px 8px;font-size:11px;border-bottom:1px solid #e5e7eb">' + (e.pausa||0) + ' min</td>' +
+        '<td style="padding:5px 8px;font-size:11px;font-weight:bold;border-bottom:1px solid #e5e7eb">' + formatOre(calcolaOreDaEntry(e)) + '</td>' +
+        '</tr>';
+    });
+  } else {
+    oreRows = '<tr><td colspan="6" style="padding:10px;font-size:11px;color:#888">Nessuna fascia oraria</td></tr>';
+  }
 
-  // Firme: immagine o spazio vuoto
+  // Firme
   const sigTecnico = pdfSignatures.tecnico
-    ? `<img src="${pdfSignatures.tecnico}" style="max-width:100%;height:60px;object-fit:contain;display:block;margin:4px 0">`
-    : `<div style="height:60px;border-bottom:1px solid #aaa;margin:4px 0 0;"></div>`;
+    ? '<img src="' + pdfSignatures.tecnico + '" style="height:55px;max-width:100%;display:block;margin:6px 0">'
+    : '<div style="height:55px;border-bottom:2px solid #999;margin:6px 0"></div>';
   const sigCliente = pdfSignatures.cliente
-    ? `<img src="${pdfSignatures.cliente}" style="max-width:100%;height:60px;object-fit:contain;display:block;margin:4px 0">`
-    : `<div style="height:60px;border-bottom:1px solid #aaa;margin:4px 0 0;"></div>`;
+    ? '<img src="' + pdfSignatures.cliente + '" style="height:55px;max-width:100%;display:block;margin:6px 0">'
+    : '<div style="height:55px;border-bottom:2px solid #999;margin:6px 0"></div>';
 
-  const tdStyle = 'font-size:11px;color:#888;padding:6px 14px;';
-  const tdValStyle = 'font-size:11px;font-weight:600;color:#1a1a2e;padding:6px 14px';
-  const rowStyle = 'border-bottom:1px solid #e8edf5';
-  const headerStyle = 'background:#1a3a6e;color:#fff;padding:7px 14px;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase';
+  // Stili costanti
+  const BLU = '#1a3a6e';
+  const BGLIGHT = '#f4f7fb';
+  const BORDER = '#c8d4e8';
+  const thStyle = 'background:#1a3a6e;color:#ffffff;font-size:10px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;padding:8px 12px';
+  const lblStyle = 'font-size:10px;color:#777777;padding:5px 10px;background:#f4f7fb;border-bottom:1px solid #e0e8f0;white-space:nowrap';
+  const valStyle = 'font-size:10px;font-weight:bold;color:#111111;padding:5px 10px;background:#f4f7fb;border-bottom:1px solid #e0e8f0';
 
-  let html = '<div style="font-family:Helvetica Neue,Arial,sans-serif;color:#1a1a2e;font-size:13px">';
+  let h = '';
 
-  // INTESTAZIONE
-  html += '<table style="width:100%;background:#1a3a6e;color:#fff;border-collapse:collapse">';
-  html += '<tr><td style="padding:20px 32px 16px">';
-  html += '<div style="font-size:22px;font-weight:800">TeknoAutomazione</div>';
-  html += '<div style="font-size:10px;opacity:.7;letter-spacing:2px;text-transform:uppercase;margin-top:2px">Rapporto Intervento Tecnico</div>';
-  html += '</td><td style="padding:20px 32px 16px;text-align:right;font-size:11px;opacity:.8;vertical-align:top">';
-  html += '<div>Data: ' + fmtD(intervento.data) + '</div>';
-  html += '<div style="margin-top:2px">Intervento #' + intervento.id + '</div>';
-  html += '</td></tr></table>';
+  // ── INTESTAZIONE ──────────────────────────────────────────────────────────
+  h += '<table width="100%" cellpadding="0" cellspacing="0" bgcolor="#1a3a6e">' +
+    '<tr>' +
+    '<td style="padding:18px 28px 14px"><font color="#ffffff"><b style="font-size:20px">TeknoAutomazione</b><br>' +
+    '<span style="font-size:9px;letter-spacing:2px">RAPPORTO INTERVENTO TECNICO</span></font></td>' +
+    '<td align="right" style="padding:18px 28px 14px"><font color="#ffffff" style="font-size:10px">' +
+    'Data: ' + fmtD(intervento.data) + '<br>Intervento #' + intervento.id + '</font></td>' +
+    '</tr></table>';
 
-  // TITOLO
-  html += '<div style="background:#eef3fb;padding:12px 32px;border-bottom:3px solid #1a3a6e">';
-  html += '<div style="font-size:16px;font-weight:700;color:#1a3a6e">' + (intervento.titolo||'—') + '</div>';
-  if (intervento.indirizzo) html += '<div style="font-size:11px;color:#555;margin-top:2px">&#128205; ' + intervento.indirizzo + '</div>';
-  html += '</div>';
+  // ── TITOLO INTERVENTO ─────────────────────────────────────────────────────
+  h += '<table width="100%" cellpadding="0" cellspacing="0" bgcolor="#eef3fb">' +
+    '<tr><td style="padding:10px 28px;border-bottom:3px solid #1a3a6e">' +
+    '<b style="font-size:15px;color:#1a3a6e">' + (intervento.titolo||'—') + '</b>' +
+    (intervento.indirizzo ? '<br><span style="font-size:10px;color:#666">&#128205; ' + intervento.indirizzo + '</span>' : '') +
+    '</td></tr></table>';
 
-  html += '<div style="padding:20px 32px">';
+  h += '<table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:16px 28px">';
 
-  // RIQUADRI RIFERIMENTI + CLIENTE
-  // Strategia: unica tabella con righe a 4 celle (label-sx | val-sx | label-dx | val-dx)
-  // E' il modo più affidabile per avere due colonne in html2pdf
+  // ── RIFERIMENTI + CLIENTE affiancati ──────────────────────────────────────
+  h += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:14px">';
+  h += '<tr>';
 
-  const lh = headerStyle + ';padding:8px 12px;font-size:10px'; // header style
-  const lc = 'font-size:10px;color:#888;padding:5px 10px;background:#f4f7fb;border-bottom:1px solid #e8edf4;border-right:1px solid #e8edf4;white-space:nowrap';
-  const vc = 'font-size:10px;font-weight:600;color:#1a1a2e;padding:5px 10px;background:#f4f7fb;border-bottom:1px solid #e8edf4;border-right:1px solid #dde3ee';
-  const lc2 = 'font-size:10px;color:#888;padding:5px 10px;background:#f4f7fb;border-bottom:1px solid #e8edf4;border-left:1px solid #dde3ee;white-space:nowrap';
-  const vc2 = 'font-size:10px;font-weight:600;color:#1a1a2e;padding:5px 10px;background:#f4f7fb;border-bottom:1px solid #e8edf4';
+  // colonna RIFERIMENTI
+  h += '<td width="49%" valign="top" style="padding-right:6px">';
+  h += '<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid ' + BORDER + '">';
+  h += '<tr><td colspan="2" style="' + thStyle + '">Riferimenti documento</td></tr>';
+  h += '<tr><td style="' + lblStyle + '" width="45%">Stato</td><td style="' + valStyle + '">' + statoLabel + '</td></tr>';
+  h += '<tr><td style="' + lblStyle + '">Data intervento</td><td style="' + valStyle + '">' + fmtD(intervento.data) + '</td></tr>';
+  if (intervento.rapportino_num) h += '<tr><td style="' + lblStyle + '">Rapportino N.</td><td style="' + valStyle + '">' + intervento.rapportino_num + (intervento.rapportino_data ? ' del ' + fmtD(intervento.rapportino_data) : '') + '</td></tr>';
+  if (intervento.offerta_num)    h += '<tr><td style="' + lblStyle + '">Ns. Offerta N.</td><td style="' + valStyle + '">' + intervento.offerta_num + '</td></tr>';
+  if (intervento.ordine_num)     h += '<tr><td style="' + lblStyle + '">Ordine Cliente N.</td><td style="' + valStyle + '">' + intervento.ordine_num + (intervento.ordine_data ? ' del ' + fmtD(intervento.ordine_data) : '') + '</td></tr>';
+  h += '</table>';
+  h += '</td>';
 
-  // Costruiamo array di righe per ciascun riquadro
-  const rifRows = [];
-  rifRows.push(['Stato', statoLabel]);
-  rifRows.push(['Data intervento', fmtD(intervento.data)]);
-  if (intervento.rapportino_num) rifRows.push(['Rapportino N.', intervento.rapportino_num + (intervento.rapportino_data ? ' del ' + fmtD(intervento.rapportino_data) : '')]);
-  if (intervento.offerta_num)    rifRows.push(['Ns. Offerta N.', intervento.offerta_num]);
-  if (intervento.ordine_num)     rifRows.push(['Ordine Cliente N.', intervento.ordine_num + (intervento.ordine_data ? ' del ' + fmtD(intervento.ordine_data) : '')]);
+  // colonna DATI CLIENTE
+  h += '<td width="49%" valign="top" style="padding-left:6px">';
+  h += '<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid ' + BORDER + '">';
+  h += '<tr><td colspan="2" style="' + thStyle + '">Dati cliente</td></tr>';
+  h += '<tr><td style="' + lblStyle + '" width="38%">Ragione sociale</td><td style="' + valStyle + '">' + clNome + '</td></tr>';
+  if (cl && cl.indirizzo_completo) h += '<tr><td style="' + lblStyle + '">Indirizzo</td><td style="' + valStyle + '">' + cl.indirizzo_completo + '</td></tr>';
+  if (cl && cl.ref)   h += '<tr><td style="' + lblStyle + '">Referente</td><td style="' + valStyle + '">' + cl.ref + '</td></tr>';
+  if (cl && cl.tel)   h += '<tr><td style="' + lblStyle + '">Telefono</td><td style="' + valStyle + '">' + cl.tel + '</td></tr>';
+  if (cl && cl.email) h += '<tr><td style="' + lblStyle + '">Email</td><td style="' + valStyle + '">' + cl.email + '</td></tr>';
+  if (cl && cl.piva)  h += '<tr><td style="' + lblStyle + '">P.IVA</td><td style="' + valStyle + '">' + cl.piva + '</td></tr>';
+  if (cl && cl.citta) h += '<tr><td style="' + lblStyle + '">Citta</td><td style="' + valStyle + '">' + cl.citta + '</td></tr>';
+  h += '</table>';
+  h += '</td>';
 
-  const cliRows = [];
-  cliRows.push(['Ragione sociale', clNome]);
-  if (cl && cl.indirizzo_completo) cliRows.push(['Indirizzo', cl.indirizzo_completo]);
-  if (cl && cl.ref)   cliRows.push(['Referente', cl.ref]);
-  if (cl && cl.tel)   cliRows.push(['Telefono', cl.tel]);
-  if (cl && cl.email) cliRows.push(['Email', cl.email]);
-  if (cl && cl.piva)  cliRows.push(['P.IVA', cl.piva]);
-  if (cl && cl.citta) cliRows.push(['Citta', cl.citta]);
+  h += '</tr></table>';
 
-  const maxRows = Math.max(rifRows.length, cliRows.length);
+  // ── ORE LAVORO ────────────────────────────────────────────────────────────
+  h += '<p style="font-size:10px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;color:#1a3a6e;margin:0 0 6px 0">Dettaglio ore lavoro</p>';
+  h += '<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid ' + BORDER + ';margin-bottom:14px">';
+  h += '<tr bgcolor="#1a3a6e">';
+  h += '<th align="left" style="padding:7px 8px;font-size:10px;color:#fff;font-weight:bold">#</th>';
+  h += '<th align="left" style="padding:7px 8px;font-size:10px;color:#fff;font-weight:bold">Data</th>';
+  h += '<th align="left" style="padding:7px 8px;font-size:10px;color:#fff;font-weight:bold">Dalle</th>';
+  h += '<th align="left" style="padding:7px 8px;font-size:10px;color:#fff;font-weight:bold">Alle</th>';
+  h += '<th align="left" style="padding:7px 8px;font-size:10px;color:#fff;font-weight:bold">Pausa</th>';
+  h += '<th align="left" style="padding:7px 8px;font-size:10px;color:#fff;font-weight:bold">Ore nette</th>';
+  h += '</tr>';
+  h += oreRows;
+  h += '<tr bgcolor="#eef3fb"><td colspan="5" align="right" style="padding:7px 8px;font-size:11px;font-weight:bold;color:#1a3a6e;border-top:2px solid #1a3a6e">TOTALE ORE</td>';
+  h += '<td style="padding:7px 8px;font-size:13px;font-weight:bold;color:#1a3a6e;border-top:2px solid #1a3a6e">' + formatOre(parseFloat(intervento.ore_totali||0)) + '</td></tr>';
+  h += '</table>';
 
-  html += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;margin-bottom:18px">';
-  html += '<tr>';
+  // ── DESCRIZIONE ───────────────────────────────────────────────────────────
+  h += '<p style="font-size:10px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;color:#1a3a6e;margin:0 0 6px 0">Descrizione lavori</p>';
+  h += '<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid ' + BORDER + ';margin-bottom:14px">';
+  h += '<tr bgcolor="#f4f7fb"><td style="padding:12px;font-size:11px;color:#333;line-height:1.7;min-height:60px">' + (intervento.descrizione||'&nbsp;') + '</td></tr>';
+  h += '</table>';
 
-  // Tabella sinistra - RIFERIMENTI
-  html += '<td valign="top" style="padding-left:6px">';
-  html += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #c8d4e8">';
-  html += '<tr><td colspan="2" style="' + lh + '">Riferimenti documento</td></tr>';
-  for (let r of rifRows) {
-    html += '<tr><td style="' + lc + '">' + r[0] + '</td><td style="' + vc + '">' + r[1] + '</td></tr>';
-  }
-  html += '</table></td>';
+  // ── FIRME ─────────────────────────────────────────────────────────────────
+  h += '<p style="font-size:10px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;color:#1a3a6e;margin:0 0 8px 0">Firme di accettazione</p>';
+  h += '<table width="100%" cellpadding="0" cellspacing="0">';
+  h += '<tr>';
 
-  // Tabella destra - CLIENTE
-  html += '<td valign="top" style="padding-right:6px">';
-  html += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #c8d4e8">';
-  html += '<tr><td colspan="2" style="' + lh + '">Dati cliente</td></tr>';
-  for (let r of cliRows) {
-    html += '<tr><td style="' + lc + '">' + r[0] + '</td><td style="' + vc + '">' + r[1] + '</td></tr>';
-  }
-  html += '</table></td>';
+  // Firma tecnico
+  h += '<td width="49%" valign="top" style="padding-right:6px">';
+  h += '<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid ' + BORDER + '">';
+  h += '<tr><td style="' + thStyle + '">Tecnico esecutore</td></tr>';
+  h += '<tr bgcolor="#f4f7fb"><td style="padding:10px 12px;height:90px">' + sigTecnico +
+    '<span style="font-size:10px;color:#555">Nome: _______________________</span><br>' +
+    '<span style="font-size:10px;color:#555">Data: ' + fmtD(intervento.data) + '</span></td></tr>';
+  h += '</table></td>';
 
-  html += '</tr></table>';
+  // Firma cliente
+  h += '<td width="49%" valign="top" style="padding-left:6px">';
+  h += '<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid ' + BORDER + '">';
+  h += '<tr><td style="' + thStyle + '">Cliente - Accettazione lavori</td></tr>';
+  h += '<tr bgcolor="#f4f7fb"><td style="padding:10px 12px;height:90px">' + sigCliente +
+    '<span style="font-size:10px;color:#555">Nome: _______________________</span><br>' +
+    '<span style="font-size:10px;color:#555">Data: ' + fmtD(intervento.data) + '</span></td></tr>';
+  h += '</table></td>';
 
-  // ORE LAVORO
-  html += '<div style="margin-bottom:18px">';
-  html += '<div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#1a3a6e;margin-bottom:8px">Dettaglio ore lavoro</div>';
-  html += '<div style="border:1px solid #dde3ee;border-radius:8px;overflow:hidden">';
-  html += '<table style="width:100%;border-collapse:collapse">';
-  html += '<thead><tr style="background:#1a3a6e;color:#fff">';
-  html += '<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600">#</th>';
-  html += '<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600">Data</th>';
-  html += '<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600">Dalle</th>';
-  html += '<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600">Alle</th>';
-  html += '<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600">Pausa</th>';
-  html += '<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600">Ore nette</th>';
-  html += '</tr></thead>';
-  html += '<tbody style="background:#fff">' + oreRows + '</tbody>';
-  html += '<tfoot><tr style="background:#eef3fb;border-top:2px solid #1a3a6e">';
-  html += '<td colspan="5" style="padding:8px 10px;font-size:11px;font-weight:700;color:#1a3a6e;text-align:right">TOTALE ORE</td>';
-  html += '<td style="padding:8px 10px;font-size:14px;font-weight:800;color:#1a3a6e">' + formatOre(parseFloat(intervento.ore_totali||0)) + '</td>';
-  html += '</tr></tfoot></table></div></div>';
+  h += '</tr></table>';
 
-  // DESCRIZIONE
-  html += '<div style="margin-bottom:20px">';
-  html += '<div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#1a3a6e;margin-bottom:8px">Descrizione lavori</div>';
-  html += '<div style="background:#f8f9fb;border:1px solid #dde3ee;border-radius:8px;padding:14px;font-size:12px;line-height:1.8;min-height:70px;color:#333">' + (intervento.descrizione||'') + '</div>';
-  html += '</div>';
+  h += '</td></tr></table>';
 
-  // FIRME (table layout per compatibilità html2pdf)
-  html += '<div>';
-  html += '<div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#1a3a6e;margin-bottom:12px">Firme di accettazione</div>';
-  html += '<table style="width:100%;border-collapse:separate;border-spacing:10px 0">';
-  html += '<tr style="vertical-align:top">';
+  // ── FOOTER ────────────────────────────────────────────────────────────────
+  h += '<table width="100%" cellpadding="0" cellspacing="0" bgcolor="#f0f2f7" style="margin-top:14px;border-top:1px solid #dde3ee">';
+  h += '<tr>';
+  h += '<td style="padding:8px 28px;font-size:9px;color:#888">Tekno Automazione &mdash; Documento generato il ' + new Date().toLocaleDateString('it-IT') + '</td>';
+  h += '<td align="right" style="padding:8px 28px;font-size:9px;color:#888">Intervento #' + intervento.id + '</td>';
+  h += '</tr></table>';
 
-  // Firma Tecnico
-  html += '<td style="width:50%;border:1px solid #dde3ee;border-radius:8px;padding:0;overflow:hidden">';
-  html += '<div style="' + headerStyle + ';border-radius:7px 7px 0 0">Tecnico esecutore</div>';
-  html += '<div style="padding:12px 14px;background:#f8f9fb;min-height:110px">';
-  html += sigTecnico;
-  html += '<div style="font-size:10px;color:#555;margin-top:8px">Nome: ___________________________</div>';
-  html += '<div style="font-size:10px;color:#555;margin-top:4px">Data: ' + fmtD(intervento.data) + '</div>';
-  html += '</div></td>';
+  const nomePulito = clNome.replace(/[^a-zA-Z0-9\s]/g,'').replace(/\s+/g,'_').substring(0,30);
+  const dataFile = fmtD(intervento.data).replace(/\//g,'-');
 
-  // Firma Cliente
-  html += '<td style="width:50%;border:1px solid #dde3ee;border-radius:8px;padding:0;overflow:hidden">';
-  html += '<div style="' + headerStyle + ';border-radius:7px 7px 0 0">Cliente - Accettazione lavori</div>';
-  html += '<div style="padding:12px 14px;background:#f8f9fb;min-height:110px">';
-  html += sigCliente;
-  html += '<div style="font-size:10px;color:#555;margin-top:8px">Nome: ___________________________</div>';
-  html += '<div style="font-size:10px;color:#555;margin-top:4px">Data: ' + fmtD(intervento.data) + '</div>';
-  html += '</div></td>';
-
-  html += '</tr></table></div>';
-  html += '</div>';
-
-  // FOOTER
-  html += '<div style="background:#f0f2f7;border-top:1px solid #dde3ee;padding:8px 32px;display:flex;justify-content:space-between;align-items:center;margin-top:16px">';
-  html += '<div style="font-size:10px;color:#888">Tekno Automazione &mdash; Documento generato il ' + new Date().toLocaleDateString('it-IT') + '</div>';
-  html += '<div style="font-size:10px;color:#888">Intervento #' + intervento.id + '</div>';
-  html += '</div>';
-
-  html += '</div>';
+  // Wrappa l'html in un div con font esplicito per html2pdf
+  const fullHtml = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:13px;background:#ffffff;color:#000000">' + h + '</div>';
 
   html2pdf().set({
-    margin: 0,
-    filename: ('intervento_' + clNome.replace(/[^a-zA-Z0-9\s]/g,'').replace(/\s+/g,'_').substring(0,30) + '_' + fmtD(intervento.data).replace(/\//g,'-') + '.pdf'),
+    margin: [8, 8, 8, 8],
+    filename: 'intervento_' + nomePulito + '_' + dataFile + '.pdf',
     image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true, allowTaint: true },
+    html2canvas: { scale: 2, useCORS: true, allowTaint: true, logging: false },
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-  }).from(html).save();
+  }).from(fullHtml).save();
   showToast('PDF generato!');
 }
 
-// ─── MOBILE MENU ─────────────────────────────────────────────────────────────
-function toggleMobMenu() {
-  const menu = document.getElementById('mob-menu');
-  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+
+// ─── OFFLINE / SYNC ──────────────────────────────────────────────────────────
+const OFFLINE_KEY = 'td_offline_queue'; // coda operazioni offline
+let isOnline = navigator.onLine;
+
+function getOfflineQueue() {
+  try { return JSON.parse(localStorage.getItem(OFFLINE_KEY) || '[]'); }
+  catch { return []; }
 }
-function closeMobMenu() {
-  const menu = document.getElementById('mob-menu');
-  if (menu) menu.style.display = 'none';
+function saveOfflineQueue(q) { localStorage.setItem(OFFLINE_KEY, JSON.stringify(q)); }
+function queueLength() { return getOfflineQueue().length; }
+
+function addToQueue(op) {
+  const q = getOfflineQueue();
+  // Se esiste già un'operazione sullo stesso id, sostituiscila
+  const idx = q.findIndex(x => x.id === op.id && x.sheet === op.sheet);
+  if (idx >= 0) q[idx] = op; else q.push(op);
+  saveOfflineQueue(q);
+  updateOfflineUI();
 }
-// Chiudi menu mobile cliccando fuori
-document.addEventListener('click', (e) => {
-  const menu = document.getElementById('mob-menu');
-  const btn = document.getElementById('mob-menu-btn');
-  if (menu && btn && !menu.contains(e.target) && !btn.contains(e.target)) {
-    menu.style.display = 'none';
+
+function updateOfflineUI() {
+  const banner = document.getElementById('offline-banner');
+  const n = queueLength();
+  if (!isOnline) {
+    banner.classList.add('visible');
+    banner.textContent = n > 0
+      ? '📡 Offline — ' + n + ' modifica/e in attesa di sincronizzazione'
+      : '📡 Sei offline — le modifiche vengono salvate localmente';
+  } else if (n > 0) {
+    banner.classList.add('visible');
+    banner.style.background = '#50d090';
+    banner.textContent = '🔄 Online — sincronizzazione ' + n + ' modifica/e in corso...';
+  } else {
+    banner.classList.remove('visible');
+    banner.style.background = '';
   }
+}
+
+async function flushOfflineQueue() {
+  const q = getOfflineQueue();
+  if (!q.length) return;
+  setSyncStatus('syncing', 'Sync offline...');
+  const failed = [];
+  for (const op of q) {
+    try {
+      if (op.action === 'append') {
+        await appendRow(op.sheet, op.row);
+      } else if (op.action === 'update') {
+        await updateSheetRow(op.sheet, op.id, op.row, op.lastCol);
+      } else if (op.action === 'delete') {
+        await deleteSheetRow(op.sheet, op.id);
+      }
+    } catch(e) {
+      console.error('flush error', op, e);
+      failed.push(op);
+    }
+  }
+  saveOfflineQueue(failed);
+  if (!failed.length) {
+    await syncAll();
+    showToast('Sincronizzazione completata ✓');
+  } else {
+    showToast(failed.length + ' operazioni non sincronizzate', 'error');
+  }
+  updateOfflineUI();
+}
+
+// Intercetta eventi online/offline
+window.addEventListener('online', async () => {
+  isOnline = true;
+  updateOfflineUI();
+  if (queueLength() > 0) await flushOfflineQueue();
+  else await syncAll();
 });
+window.addEventListener('offline', () => {
+  isOnline = false;
+  updateOfflineUI();
+});
+
+// ─── VERSIONI OFFLINE DI appendRow / updateSheetRow / deleteSheetRow ──────────
+// Le funzioni originali vengono wrappate: se offline → coda locale
+const _appendRow = appendRow;
+const _updateSheetRow = updateSheetRow;
+const _deleteSheetRow = deleteSheetRow;
+
+async function appendRow(sheet, row) {
+  if (!isOnline) {
+    const id = row[0]; // ID è sempre il primo elemento
+    addToQueue({ action:'append', sheet, id, row });
+    return;
+  }
+  return _appendRow(sheet, row);
+}
+
+async function updateSheetRow(sheet, id, row, lastCol) {
+  if (!isOnline) {
+    addToQueue({ action:'update', sheet, id, row, lastCol });
+    return;
+  }
+  return _updateSheetRow(sheet, id, row, lastCol);
+}
+
+async function deleteSheetRow(sheet, id) {
+  if (!isOnline) {
+    addToQueue({ action:'delete', sheet, id });
+    return;
+  }
+  return _deleteSheetRow(sheet, id);
+}
+
+// ─── CACHE LOCALE DEI DATI (per uso offline) ──────────────────────────────────
+function cacheDataLocally() {
+  localStorage.setItem('td_cache_interventi', JSON.stringify(interventi));
+  localStorage.setItem('td_cache_clienti', JSON.stringify(clienti));
+  localStorage.setItem('td_cache_time', Date.now().toString());
+}
+
+function loadFromLocalCache() {
+  try {
+    const ci = localStorage.getItem('td_cache_interventi');
+    const cc = localStorage.getItem('td_cache_clienti');
+    const t  = parseInt(localStorage.getItem('td_cache_time') || '0');
+    if (ci && cc) {
+      interventi = JSON.parse(ci);
+      clienti = JSON.parse(cc);
+      const age = Math.round((Date.now() - t) / 60000);
+      renderAll();
+      setSyncStatus('ok', 'Cache locale (' + age + ' min fa)');
+      return true;
+    }
+  } catch(e) {}
+  return false;
+}
 
 // ─── EVENT LISTENERS ──────────────────────────────────────────────────────────
 window.onload=()=>{
@@ -1569,6 +1714,15 @@ window.onload=()=>{
   document.querySelectorAll('.nav-item').forEach(item=>{item.onclick=()=>showPage(item.dataset.page);});
   document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');}));
 };
+// Registra Service Worker per offline
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(reg => console.log('SW registrato:', reg.scope))
+      .catch(err => console.log('SW errore:', err));
+  });
+}
+
 </script>
 
 <script src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
