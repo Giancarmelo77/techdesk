@@ -4,10 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tekno Automazione — Gestione Interventi</title>
-<meta name="theme-color" content="#1a3a6e">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="manifest" href="manifest.json">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <style>
@@ -146,9 +142,7 @@
     .filters{flex-direction:column;align-items:stretch}
     .search-input,.year-select{width:100%}
   }
-  /* OFFLINE */
-  .offline-banner{display:none;position:fixed;bottom:0;left:0;right:0;z-index:9000;background:#f09050;color:#fff;padding:10px 20px;font-size:13px;font-weight:700;text-align:center;font-family:var(--mono)}
-  .offline-banner.visible{display:block}
+  
 </style>
 </head>
 <body>
@@ -278,10 +272,6 @@
   </div>
 </div>
 
-<!-- BANNER OFFLINE -->
-<div class="offline-banner" id="offline-banner">
-  📡 Sei offline — Le modifiche vengono salvate localmente e sincronizzate appena torni online
-</div>
 
 <!-- MODAL INTERVENTO -->
 <div class="overlay" id="modal-intervento">
@@ -497,14 +487,6 @@ function requestAuth() { requestAuthExplicit(); }
 
 async function onSignedIn() {
   setSyncStatus('syncing', 'Connessione...');
-  // Se offline, carica subito dalla cache e poi prova a sync
-  if (!navigator.onLine) {
-    if (loadFromLocalCache()) {
-      hideLoading();
-      updateOfflineUI();
-      return;
-    }
-  }
   setLoading('Configurazione foglio...');
   await ensureSheets();
   setLoading('Configurazione cartella Drive...');
@@ -650,8 +632,6 @@ async function syncAll() {
     })).filter(c => c.id);
     renderAll();
     setSyncStatus('ok', 'Sincronizzato ✓');
-    cacheDataLocally(); // salva cache locale per uso offline
-    updateOfflineUI();
   } catch(e) {
     setSyncStatus('error', 'Errore sync');
     showToast('Errore di sincronizzazione', 'error');
@@ -1019,17 +999,9 @@ async function saveIntervento() {
     await refreshTokenIfNeeded();
     const id=editingId||genId('I');
     const row=interventoToRow(id,d);
-    // Aggiorna array locale immediatamente (anche offline)
-    if(editingId) {
-      const idx2=interventi.findIndex(x=>x.id===editingId);
-      if(idx2>=0) interventi[idx2]={id:editingId,...d};
-    } else {
-      interventi.unshift({id,...d});
-    }
-    renderAll();
     if(editingId) await updateSheetRow('Interventi',editingId,row,'S');
     else await appendRow('Interventi',row);
-    if(isOnline) await syncAll();
+    await syncAll();
     modalDirty = false;
     closeModal('modal-intervento', true);
     showToast(editingId?'Intervento aggiornato ✓':'Intervento creato ✓');
@@ -1089,13 +1061,8 @@ function openDetail(id) {
 async function deleteIntervento(id) {
   if(!confirm('Eliminare questo intervento?')) return;
   setSyncStatus('syncing','Eliminazione...');
-  try{
-    interventi=interventi.filter(x=>x.id!==id);
-    renderAll();
-    await deleteSheetRow('Interventi',id);
-    if(isOnline) await syncAll();
-    closeModal('modal-detail');showToast('Intervento eliminato');
-  }catch(e){showToast('Errore eliminazione','error');}
+  try{await deleteSheetRow('Interventi',id);await syncAll();closeModal('modal-detail');showToast('Intervento eliminato');}
+  catch(e){showToast('Errore eliminazione','error');}
 }
 
 // ─── CLIENTI CRUD ─────────────────────────────────────────────────────────────
@@ -1126,11 +1093,8 @@ function openEditCliente(id) {
     setSyncStatus('syncing','Salvataggio...');
     const d={nome,ref:document.getElementById('c_ref').value,tel:document.getElementById('c_tel').value,email:document.getElementById('c_email').value,citta:document.getElementById('c_citta').value,piva:document.getElementById('c_piva').value,indirizzo_completo:document.getElementById('c_indirizzo').value};
     try{
-      const ci2=clienti.findIndex(x=>x.id===id);
-      if(ci2>=0) clienti[ci2]={...clienti[ci2],...d};
-      renderClienti();
       await updateSheetRow('Clienti',id,clienteToRow(id,d),'H');
-      if(isOnline) await syncAll();
+      await syncAll();
       closeModal('modal-cliente');showToast('Cliente aggiornato ✓');
       document.getElementById('save_cliente_btn').onclick=saveCliente;
       document.getElementById('modal-cliente-title').textContent='Nuovo Cliente';
@@ -1150,10 +1114,8 @@ async function saveCliente() {
   const d={nome,ref:document.getElementById('c_ref').value,tel:document.getElementById('c_tel').value,email:document.getElementById('c_email').value,citta:document.getElementById('c_citta').value,piva:document.getElementById('c_piva').value,indirizzo_completo:document.getElementById('c_indirizzo').value};
   try{
     await refreshTokenIfNeeded();
-    clienti.push({id,...d});
-    renderClienti();
     await appendRow('Clienti',clienteToRow(id,d));
-    if(isOnline) await syncAll();
+    await syncAll();
     closeModal('modal-cliente');showToast('Cliente aggiunto ✓');
   }catch(e){showToast('Errore salvataggio','error');setSyncStatus('error','Errore');}
   btn.disabled=false; btn.textContent='Salva Cliente';
@@ -1563,140 +1525,6 @@ function exportToPDF(intervento) {
 }
 
 
-// ─── OFFLINE / SYNC ──────────────────────────────────────────────────────────
-const OFFLINE_KEY = 'td_offline_queue'; // coda operazioni offline
-let isOnline = navigator.onLine;
-
-function getOfflineQueue() {
-  try { return JSON.parse(localStorage.getItem(OFFLINE_KEY) || '[]'); }
-  catch { return []; }
-}
-function saveOfflineQueue(q) { localStorage.setItem(OFFLINE_KEY, JSON.stringify(q)); }
-function queueLength() { return getOfflineQueue().length; }
-
-function addToQueue(op) {
-  const q = getOfflineQueue();
-  // Se esiste già un'operazione sullo stesso id, sostituiscila
-  const idx = q.findIndex(x => x.id === op.id && x.sheet === op.sheet);
-  if (idx >= 0) q[idx] = op; else q.push(op);
-  saveOfflineQueue(q);
-  updateOfflineUI();
-}
-
-function updateOfflineUI() {
-  const banner = document.getElementById('offline-banner');
-  const n = queueLength();
-  if (!isOnline) {
-    banner.classList.add('visible');
-    banner.textContent = n > 0
-      ? '📡 Offline — ' + n + ' modifica/e in attesa di sincronizzazione'
-      : '📡 Sei offline — le modifiche vengono salvate localmente';
-  } else if (n > 0) {
-    banner.classList.add('visible');
-    banner.style.background = '#50d090';
-    banner.textContent = '🔄 Online — sincronizzazione ' + n + ' modifica/e in corso...';
-  } else {
-    banner.classList.remove('visible');
-    banner.style.background = '';
-  }
-}
-
-async function flushOfflineQueue() {
-  const q = getOfflineQueue();
-  if (!q.length) return;
-  setSyncStatus('syncing', 'Sync offline...');
-  const failed = [];
-  for (const op of q) {
-    try {
-      if (op.action === 'append') {
-        await appendRow(op.sheet, op.row);
-      } else if (op.action === 'update') {
-        await updateSheetRow(op.sheet, op.id, op.row, op.lastCol);
-      } else if (op.action === 'delete') {
-        await deleteSheetRow(op.sheet, op.id);
-      }
-    } catch(e) {
-      console.error('flush error', op, e);
-      failed.push(op);
-    }
-  }
-  saveOfflineQueue(failed);
-  if (!failed.length) {
-    await syncAll();
-    showToast('Sincronizzazione completata ✓');
-  } else {
-    showToast(failed.length + ' operazioni non sincronizzate', 'error');
-  }
-  updateOfflineUI();
-}
-
-// Intercetta eventi online/offline
-window.addEventListener('online', async () => {
-  isOnline = true;
-  updateOfflineUI();
-  if (queueLength() > 0) await flushOfflineQueue();
-  else await syncAll();
-});
-window.addEventListener('offline', () => {
-  isOnline = false;
-  updateOfflineUI();
-});
-
-// ─── VERSIONI OFFLINE DI appendRow / updateSheetRow / deleteSheetRow ──────────
-// Le funzioni originali vengono wrappate: se offline → coda locale
-const _appendRow = appendRow;
-const _updateSheetRow = updateSheetRow;
-const _deleteSheetRow = deleteSheetRow;
-
-async function appendRow(sheet, row) {
-  if (!isOnline) {
-    const id = row[0]; // ID è sempre il primo elemento
-    addToQueue({ action:'append', sheet, id, row });
-    return;
-  }
-  return _appendRow(sheet, row);
-}
-
-async function updateSheetRow(sheet, id, row, lastCol) {
-  if (!isOnline) {
-    addToQueue({ action:'update', sheet, id, row, lastCol });
-    return;
-  }
-  return _updateSheetRow(sheet, id, row, lastCol);
-}
-
-async function deleteSheetRow(sheet, id) {
-  if (!isOnline) {
-    addToQueue({ action:'delete', sheet, id });
-    return;
-  }
-  return _deleteSheetRow(sheet, id);
-}
-
-// ─── CACHE LOCALE DEI DATI (per uso offline) ──────────────────────────────────
-function cacheDataLocally() {
-  localStorage.setItem('td_cache_interventi', JSON.stringify(interventi));
-  localStorage.setItem('td_cache_clienti', JSON.stringify(clienti));
-  localStorage.setItem('td_cache_time', Date.now().toString());
-}
-
-function loadFromLocalCache() {
-  try {
-    const ci = localStorage.getItem('td_cache_interventi');
-    const cc = localStorage.getItem('td_cache_clienti');
-    const t  = parseInt(localStorage.getItem('td_cache_time') || '0');
-    if (ci && cc) {
-      interventi = JSON.parse(ci);
-      clienti = JSON.parse(cc);
-      const age = Math.round((Date.now() - t) / 60000);
-      renderAll();
-      setSyncStatus('ok', 'Cache locale (' + age + ' min fa)');
-      return true;
-    }
-  } catch(e) {}
-  return false;
-}
-
 // ─── EVENT LISTENERS ──────────────────────────────────────────────────────────
 window.onload=()=>{
   const now=new Date(); calYear=now.getFullYear(); calMonth=now.getMonth();
@@ -1714,14 +1542,6 @@ window.onload=()=>{
   document.querySelectorAll('.nav-item').forEach(item=>{item.onclick=()=>showPage(item.dataset.page);});
   document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');}));
 };
-// Registra Service Worker per offline
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js')
-      .then(reg => console.log('SW registrato:', reg.scope))
-      .catch(err => console.log('SW errore:', err));
-  });
-}
 
 </script>
 
