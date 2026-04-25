@@ -1413,53 +1413,36 @@ function exportToPDF(intervento) {
   html += '<div style="padding:20px 32px">';
 
   // RIQUADRI RIFERIMENTI + CLIENTE
-  // Strategia: unica tabella con righe a 4 celle (label-sx | val-sx | label-dx | val-dx)
-  // E' il modo più affidabile per avere due colonne in html2pdf
+  // Costruiamo le righe cliente separatamente
+  let clRows = '';
+  clRows += '<tr><td style="font-size:12px;font-weight:700;color:#1a1a2e;padding:8px 14px 4px 14px" colspan="2">' + clNome + '</td></tr>';
+  if (cl && cl.indirizzo_completo) clRows += '<tr><td style="font-size:11px;color:#888;padding:3px 14px;width:38%">Indirizzo</td><td style="font-size:11px;color:#333;padding:3px 14px">' + cl.indirizzo_completo + '</td></tr>';
+  if (cl && cl.ref)   clRows += '<tr><td style="font-size:11px;color:#888;padding:3px 14px">Referente</td><td style="font-size:11px;color:#333;padding:3px 14px">' + cl.ref + '</td></tr>';
+  if (cl && cl.tel)   clRows += '<tr><td style="font-size:11px;color:#888;padding:3px 14px">Telefono</td><td style="font-size:11px;color:#333;padding:3px 14px">' + cl.tel + '</td></tr>';
+  if (cl && cl.email) clRows += '<tr><td style="font-size:11px;color:#888;padding:3px 14px">Email</td><td style="font-size:11px;color:#333;padding:3px 14px">' + cl.email + '</td></tr>';
+  if (cl && cl.piva)  clRows += '<tr><td style="font-size:11px;color:#888;padding:3px 14px">P.IVA</td><td style="font-size:11px;color:#333;padding:3px 14px">' + cl.piva + '</td></tr>';
+  if (cl && cl.citta) clRows += '<tr><td style="font-size:11px;color:#888;padding:3px 14px">Città</td><td style="font-size:11px;color:#333;padding:3px 14px">' + cl.citta + '</td></tr>';
 
-  const lh = headerStyle + ';padding:8px 12px;font-size:10px'; // header style
-  const lc = 'font-size:10px;color:#888;padding:5px 10px;background:#f4f7fb;border-bottom:1px solid #e8edf4;border-right:1px solid #e8edf4;white-space:nowrap';
-  const vc = 'font-size:10px;font-weight:600;color:#1a1a2e;padding:5px 10px;background:#f4f7fb;border-bottom:1px solid #e8edf4;border-right:1px solid #dde3ee';
-  const lc2 = 'font-size:10px;color:#888;padding:5px 10px;background:#f4f7fb;border-bottom:1px solid #e8edf4;border-left:1px solid #dde3ee;white-space:nowrap';
-  const vc2 = 'font-size:10px;font-weight:600;color:#1a1a2e;padding:5px 10px;background:#f4f7fb;border-bottom:1px solid #e8edf4';
+  // Tabella a due colonne: Riferimenti | Cliente
+  html += '<table style="width:100%;border-collapse:collapse;margin-bottom:18px">';
+  html += '<tr style="vertical-align:top">';
 
-  // Costruiamo array di righe per ciascun riquadro
-  const rifRows = [];
-  rifRows.push(['Stato', statoLabel]);
-  rifRows.push(['Data intervento', fmtD(intervento.data)]);
-  if (intervento.rapportino_num) rifRows.push(['Rapportino N.', intervento.rapportino_num + (intervento.rapportino_data ? ' del ' + fmtD(intervento.rapportino_data) : '')]);
-  if (intervento.offerta_num)    rifRows.push(['Ns. Offerta N.', intervento.offerta_num]);
-  if (intervento.ordine_num)     rifRows.push(['Ordine Cliente N.', intervento.ordine_num + (intervento.ordine_data ? ' del ' + fmtD(intervento.ordine_data) : '')]);
-
-  const cliRows = [];
-  cliRows.push(['Ragione sociale', clNome]);
-  if (cl && cl.indirizzo_completo) cliRows.push(['Indirizzo', cl.indirizzo_completo]);
-  if (cl && cl.ref)   cliRows.push(['Referente', cl.ref]);
-  if (cl && cl.tel)   cliRows.push(['Telefono', cl.tel]);
-  if (cl && cl.email) cliRows.push(['Email', cl.email]);
-  if (cl && cl.piva)  cliRows.push(['P.IVA', cl.piva]);
-  if (cl && cl.citta) cliRows.push(['Citta', cl.citta]);
-
-  const maxRows = Math.max(rifRows.length, cliRows.length);
-
-  html += '<table width="100%" cellpadding="0" cellspacing="8" style="border-collapse:separate;margin-bottom:18px">';
-  html += '<tr>';
-
-  // Tabella sinistra - RIFERIMENTI
-  html += '<td valign="top">';
-  html += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #c8d4e8">';
-  html += '<tr><td colspan="2" style="' + lh + '">Riferimenti documento</td></tr>';
-  for (let r of rifRows) {
-    html += '<tr><td style="' + lc + '">' + r[0] + '</td><td style="' + vc + '">' + r[1] + '</td></tr>';
-  }
+  // Cella RIFERIMENTI
+  html += '<td style="width:48%;padding-right:8px;vertical-align:top">';
+  html += '<table style="width:100%;border-collapse:collapse;border:1px solid #dde3ee">';
+  html += '<tr><td colspan="2" style="' + headerStyle + ';padding:7px 12px">Riferimenti documento</td></tr>';
+  html += '<tr style="' + rowStyle + '"><td style="' + tdStyle + 'width:45%;background:#f8f9fb">Stato</td><td style="' + tdValStyle + ';background:#f8f9fb">' + statoLabel + '</td></tr>';
+  html += '<tr style="' + rowStyle + '"><td style="' + tdStyle + 'background:#f8f9fb">Data intervento</td><td style="' + tdValStyle + ';background:#f8f9fb">' + fmtD(intervento.data) + '</td></tr>';
+  if (intervento.rapportino_num) html += '<tr style="' + rowStyle + '"><td style="' + tdStyle + 'background:#f8f9fb">Rapportino N.</td><td style="' + tdValStyle + ';background:#f8f9fb">' + intervento.rapportino_num + (intervento.rapportino_data ? ' del ' + fmtD(intervento.rapportino_data) : '') + '</td></tr>';
+  if (intervento.offerta_num)    html += '<tr style="' + rowStyle + '"><td style="' + tdStyle + 'background:#f8f9fb">Ns. Offerta N.</td><td style="' + tdValStyle + ';background:#f8f9fb">' + intervento.offerta_num + '</td></tr>';
+  if (intervento.ordine_num)     html += '<tr><td style="' + tdStyle + 'background:#f8f9fb">Ordine Cliente N.</td><td style="' + tdValStyle + ';background:#f8f9fb">' + intervento.ordine_num + (intervento.ordine_data ? ' del ' + fmtD(intervento.ordine_data) : '') + '</td></tr>';
   html += '</table></td>';
 
-  // Tabella destra - CLIENTE
-  html += '<td valign="top">';
-  html += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #c8d4e8">';
-  html += '<tr><td colspan="2" style="' + lh + '">Dati cliente</td></tr>';
-  for (let r of cliRows) {
-    html += '<tr><td style="' + lc + '">' + r[0] + '</td><td style="' + vc + '">' + r[1] + '</td></tr>';
-  }
+  // Cella CLIENTE
+  html += '<td style="width:48%;padding-left:8px;vertical-align:top">';
+  html += '<table style="width:100%;border-collapse:collapse;border:1px solid #dde3ee">';
+  html += '<tr><td colspan="2" style="' + headerStyle + ';padding:7px 12px">Dati cliente</td></tr>';
+  html += clRows;
   html += '</table></td>';
 
   html += '</tr></table>';
@@ -1526,7 +1509,7 @@ function exportToPDF(intervento) {
 
   html2pdf().set({
     margin: 0,
-    filename: ('intervento_' + clNome.replace(/[^a-zA-Z0-9\s]/g,'').replace(/\s+/g,'_').substring(0,30) + '_' + fmtD(intervento.data).replace(/\//g,'-') + '.pdf'),
+    filename: `intervento_${intervento.id}_${fmtD(intervento.data).replace(/\//g,'-')}.pdf`,
     image: { type: 'jpeg', quality: 0.98 },
     html2canvas: { scale: 2, useCORS: true, allowTaint: true },
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
