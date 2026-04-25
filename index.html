@@ -1525,9 +1525,23 @@ function exportToPDF(intervento) {
 }
 
 
+// ─── MOBILE MENU ─────────────────────────────────────────────────────────────
+function toggleMobMenu() {
+  const menu = document.getElementById('mob-menu');
+  if (!menu) return;
+  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+}
+function closeMobMenu() {
+  const menu = document.getElementById('mob-menu');
+  if (menu) menu.style.display = 'none';
+}
+
 // ─── EVENT LISTENERS ──────────────────────────────────────────────────────────
 window.onload=()=>{
   const now=new Date(); calYear=now.getFullYear(); calMonth=now.getMonth();
+  // Assegna onclick al pulsante principale (default: nuovo intervento)
+  const mainBtn = document.getElementById('main-action-btn');
+  if (mainBtn) mainBtn.onclick = openNewIntervento;
   document.getElementById('save_intervento_btn').onclick=saveIntervento;
   document.getElementById('save_cliente_btn').onclick=saveCliente;
   document.getElementById('file_input').onchange=e=>addFiles(e.target.files);
@@ -1541,6 +1555,14 @@ window.onload=()=>{
   document.querySelectorAll('#page-fatture .filter-btn').forEach(btn=>{btn.onclick=()=>{document.querySelectorAll('#page-fatture .filter-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');currentFatturaFilter=btn.dataset.fatturaFilter;renderFatture();};});
   document.querySelectorAll('.nav-item').forEach(item=>{item.onclick=()=>showPage(item.dataset.page);});
   document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');}));
+  // Chiudi menu mobile cliccando fuori
+  document.addEventListener('click', (e) => {
+    const menu = document.getElementById('mob-menu');
+    const btn = document.getElementById('mob-menu-btn');
+    if (menu && btn && !menu.contains(e.target) && !btn.contains(e.target)) {
+      menu.style.display = 'none';
+    }
+  });
 };
 
 </script>
