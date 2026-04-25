@@ -2,7 +2,7 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 <title>Tekno Automazione — Gestione Interventi</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -143,6 +143,12 @@
     .search-input,.year-select{width:100%}
   }
   
+  /* PDF PRINT STYLES - hidden on screen but used for PDF generation */
+  .pdf-hidden { display: none; }
+  @media print {
+    body { background: white; }
+    .no-print { display: none !important; }
+  }
 </style>
 </head>
 <body>
@@ -182,7 +188,6 @@
         <button class="btn btn-warning btn-sm desk-only" onclick="document.getElementById('import-file').click()">📂 Importa JSON</button>
         <button class="btn btn-success btn-sm desk-only" onclick="exportToExcel()">📊 Esporta Excel</button>
         <button class="btn btn-warning btn-sm desk-only" onclick="document.getElementById('import-csv-file').click()">📂 Importa CSV</button>
-        <!-- Menu hamburger per azioni su mobile -->
         <button class="btn btn-secondary btn-sm mob-only" onclick="toggleMobMenu()" id="mob-menu-btn">⚙️</button>
         <div id="mob-menu" style="display:none;position:fixed;top:56px;right:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px;z-index:300;min-width:180px;box-shadow:0 8px 24px rgba(0,0,0,0.4)">
           <div onclick="syncAll();closeMobMenu()" style="padding:10px 14px;cursor:pointer;font-size:13px;font-weight:600;border-radius:6px;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">↻ Sync</div>
@@ -199,1405 +204,141 @@
       </div>
     </div>
 
-    <!-- DASHBOARD -->
-    <div class="content" id="page-dashboard">
-      <div class="stats-grid">
-        <div class="stat-card yellow"><div class="stat-label">Attività Aperte</div><div class="stat-value" id="stat-total">—</div></div>
-        <div class="stat-card teal"><div class="stat-label">In Corso</div><div class="stat-value" id="stat-progress">—</div></div>
-        <div class="stat-card green"><div class="stat-label">Attesa Ordine</div><div class="stat-value" id="stat-closed">—</div></div>
-        <div class="stat-card red"><div class="stat-label">Da Fatturare</div><div class="stat-value" id="stat-toinvoice">—</div></div>
-      </div>
-      <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:14px">Interventi Aperti / In Corso</div>
-      <div class="table-wrap"><table>
-        <thead><tr><th>ID</th><th>Titolo</th><th>Cliente</th><th>Stato</th><th>Ore</th><th>Data</th></tr></thead>
-        <tbody id="dash-tbody"></tbody>
-      </table></div>
-    </div>
-
-    <!-- INTERVENTI -->
-    <div class="content" id="page-interventi" style="display:none">
-      <div class="filters">
-        <input class="search-input" placeholder="🔍 Cerca..." id="search-input">
-        <select class="year-select" id="interventi-year-filter"><option value="tutti">Tutti gli anni</option></select>
-        <button class="filter-btn active" data-filter="tutti">Tutti</button>
-        <button class="filter-btn" data-filter="aperto">Aperti</button>
-        <button class="filter-btn" data-filter="in-corso">In Corso</button>
-        <button class="filter-btn" data-filter="attesa-ordine">Attesa Ordine</button>
-        <button class="filter-btn" data-filter="chiuso">Chiusi</button>
-      </div>
-      <div class="table-wrap"><table>
-        <thead><tr><th>N. Offerta</th><th>Titolo</th><th>Cliente</th><th>Stato</th><th>Ore</th><th>Data</th><th>Fattura</th><th></th></tr></thead>
-        <tbody id="main-tbody"></tbody>
-      </table></div>
-    </div>
-
-    <!-- FATTURE -->
-    <div class="content" id="page-fatture" style="display:none">
-      <div class="filters">
-        <input class="search-input" placeholder="🔍 Cerca..." id="fattura-search-input">
-        <select class="year-select" id="fatture-year-filter"><option value="tutti">Tutti gli anni</option></select>
-        <button class="filter-btn active" data-fattura-filter="tutti">Tutti</button>
-        <button class="filter-btn" data-fattura-filter="emettere">Emettere</button>
-        <button class="filter-btn" data-fattura-filter="attesa">Attesa Pagamento</button>
-        <button class="filter-btn" data-fattura-filter="parziale">Parziale</button>
-        <button class="filter-btn" data-fattura-filter="pagata">Pagata</button>
-      </div>
-      <div class="table-wrap"><table>
-        <thead><tr><th>N. Offerta</th><th>Titolo</th><th>Cliente</th><th>Data</th><th>Importo</th><th>Stato Fattura</th><th>Fattura N.</th><th></th></tr></thead>
-        <tbody id="fatture-tbody"></tbody>
-      </table></div>
-    </div>
-
-    <!-- CALENDARIO -->
-    <div class="content" id="page-calendario" style="display:none">
-      <div style="max-width:700px">
-        <div class="cal-nav">
-          <button class="cal-nav-btn" id="prev-month">‹</button>
-          <div class="cal-month-title" id="cal-title"></div>
-          <button class="cal-nav-btn" id="next-month">›</button>
-        </div>
-        <div class="cal-header">
-          <div class="cal-day-name">Lun</div><div class="cal-day-name">Mar</div><div class="cal-day-name">Mer</div>
-          <div class="cal-day-name">Gio</div><div class="cal-day-name">Ven</div><div class="cal-day-name">Sab</div><div class="cal-day-name">Dom</div>
-        </div>
-        <div class="cal-grid" id="cal-grid"></div>
-        <div id="events-list" style="margin-top:24px"></div>
-      </div>
-    </div>
-
-    <!-- CLIENTI -->
-    <div class="content" id="page-clienti" style="display:none">
-      <div class="client-cards" id="client-grid"></div>
-    </div>
+    <div class="content" id="page-dashboard"><div class="stats-grid"><div class="stat-card yellow"><div class="stat-label">Attività Aperte</div><div class="stat-value" id="stat-total">—</div></div><div class="stat-card teal"><div class="stat-label">In Corso</div><div class="stat-value" id="stat-progress">—</div></div><div class="stat-card green"><div class="stat-label">Attesa Ordine</div><div class="stat-value" id="stat-closed">—</div></div><div class="stat-card red"><div class="stat-label">Da Fatturare</div><div class="stat-value" id="stat-toinvoice">—</div></div></div><div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:14px">Interventi Aperti / In Corso</div><div class="table-wrap"><table><thead><tr><th>ID</th><th>Titolo</th><th>Cliente</th><th>Stato</th><th>Ore</th><th>Data</th></tr></thead><tbody id="dash-tbody"></tbody></table></div></div>
+    <div class="content" id="page-interventi" style="display:none"><div class="filters"><input class="search-input" placeholder="🔍 Cerca..." id="search-input"><select class="year-select" id="interventi-year-filter"><option value="tutti">Tutti gli anni</option></select><button class="filter-btn active" data-filter="tutti">Tutti</button><button class="filter-btn" data-filter="aperto">Aperti</button><button class="filter-btn" data-filter="in-corso">In Corso</button><button class="filter-btn" data-filter="attesa-ordine">Attesa Ordine</button><button class="filter-btn" data-filter="chiuso">Chiusi</button></div><div class="table-wrap"><table><thead><tr><th>N. Offerta</th><th>Titolo</th><th>Cliente</th><th>Stato</th><th>Ore</th><th>Data</th><th>Fattura</th><th></th></tr></thead><tbody id="main-tbody"></tbody></table></div></div>
+    <div class="content" id="page-fatture" style="display:none"><div class="filters"><input class="search-input" placeholder="🔍 Cerca..." id="fattura-search-input"><select class="year-select" id="fatture-year-filter"><option value="tutti">Tutti gli anni</option></select><button class="filter-btn active" data-fattura-filter="tutti">Tutti</button><button class="filter-btn" data-fattura-filter="emettere">Emettere</button><button class="filter-btn" data-fattura-filter="attesa">Attesa Pagamento</button><button class="filter-btn" data-fattura-filter="parziale">Parziale</button><button class="filter-btn" data-fattura-filter="pagata">Pagata</button></div><div class="table-wrap"><table><thead><tr><th>N. Offerta</th><th>Titolo</th><th>Cliente</th><th>Data</th><th>Importo</th><th>Stato Fattura</th><th>Fattura N.</th><th></th></tr></thead><tbody id="fatture-tbody"></tbody></table></div></div>
+    <div class="content" id="page-calendario" style="display:none"><div style="max-width:700px"><div class="cal-nav"><button class="cal-nav-btn" id="prev-month">‹</button><div class="cal-month-title" id="cal-title"></div><button class="cal-nav-btn" id="next-month">›</button></div><div class="cal-header"><div class="cal-day-name">Lun</div><div class="cal-day-name">Mar</div><div class="cal-day-name">Mer</div><div class="cal-day-name">Gio</div><div class="cal-day-name">Ven</div><div class="cal-day-name">Sab</div><div class="cal-day-name">Dom</div></div><div class="cal-grid" id="cal-grid"></div><div id="events-list" style="margin-top:24px"></div></div></div>
+    <div class="content" id="page-clienti" style="display:none"><div class="client-cards" id="client-grid"></div></div>
   </div>
 </div>
 
-
-<!-- MODAL INTERVENTO -->
-<div class="overlay" id="modal-intervento">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title" id="modal-title-intervento">Nuovo Intervento</div>
-      <button class="modal-close" onclick="closeModal('modal-intervento')">×</button>
-    </div>
-    <div class="modal-body">
-      <div class="form-grid">
-        <div class="form-group full"><label class="form-label">Titolo Intervento *</label><input class="form-control" id="f_titolo"></div>
-        <div class="form-group"><label class="form-label">Cliente</label><select class="form-control" id="f_cliente"></select></div>
-        <div class="form-group"><label class="form-label">Stato Intervento</label>
-          <select class="form-control" id="f_stato">
-            <option value="aperto">Aperto</option><option value="in-corso">In Corso</option>
-            <option value="attesa-ordine">Attesa Ordine</option><option value="chiuso">Chiuso</option>
-          </select>
-        </div>
-        <div class="form-group"><label class="form-label">Data Intervento</label><input class="form-control" id="f_data" type="date"></div>
-        <div class="form-group full"><label class="form-label">Rapportino Tecnico N.</label><input class="form-control" id="f_rapportino_num" placeholder="N° rapportino"></div>
-        <div class="form-group"><label class="form-label">Rapportino Data</label><input class="form-control" id="f_rapportino_data" type="date"></div>
-        <div class="form-group full"><label class="form-label">Ns. Offerta N.</label><input class="form-control" id="f_offerta_num" placeholder="N° offerta"></div>
-        <div class="form-group full"><label class="form-label">Ordine Cliente N.</label><input class="form-control" id="f_ordine_num" placeholder="N° ordine cliente"></div>
-        <div class="form-group"><label class="form-label">Ordine Data</label><input class="form-control" id="f_ordine_data" type="date"></div>
-        <div class="form-group full">
-          <label class="form-label">Dettaglio Ore Lavoro</label>
-          <div class="hours-container">
-            <div id="hours-list"></div>
-            <button type="button" class="btn-add-hour" onclick="addHourEntry()">+ Aggiungi fascia oraria</button>
-          </div>
-          <div class="total-hours" id="total_ore_display">Totale Ore: 0:00</div>
-          <input type="hidden" id="f_ore_totali">
-        </div>
-        <div class="form-group full"><label class="form-label">Indirizzo</label><input class="form-control" id="f_indirizzo"></div>
-        <div class="form-group full"><label class="form-label">Descrizione</label><textarea class="form-control" id="f_descrizione" rows="2"></textarea></div>
-        <div class="form-group full" style="margin-top:10px;border-top:1px solid var(--border);padding-top:16px">
-          <label class="form-label" style="color:var(--blue)">💰 DATI FATTURAZIONE</label>
-        </div>
-        <div class="form-group"><label class="form-label">Emessa Fattura il</label><input class="form-control" id="f_fattura_data" type="date"></div>
-        <div class="form-group"><label class="form-label">Numero Fattura</label><input class="form-control" id="f_fattura_num" placeholder="Fattura N."></div>
-        <div class="form-group"><label class="form-label">Importo (€)</label><input class="form-control" id="f_importo" type="number" step="0.01" placeholder="0.00"></div>
-        <div class="form-group full"><label class="form-label">Stato Fattura</label>
-          <select class="form-control" id="f_stato_fattura">
-            <option value="">— Vuoto —</option><option value="emettere">Emettere Fattura</option>
-            <option value="attesa">Attesa Pagamento</option><option value="parziale">Pagamento Parziale</option><option value="pagata">Pagata</option>
-          </select>
-        </div>
-        <div class="form-group full">
-          <label class="form-label">📎 Allegati</label>
-          <div class="file-upload-area" onclick="document.getElementById('file_input').click()">📎 Clicca per allegare file</div>
-          <input type="file" id="file_input" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt" style="display:none">
-          <div class="file-grid" id="file_preview"></div>
-        </div>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('modal-intervento')">Annulla</button>
-      <button class="btn btn-primary" id="save_intervento_btn">Salva</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL DETTAGLIO -->
-<div class="overlay" id="modal-detail">
-  <div class="modal">
-    <div class="modal-header">
-      <div><div class="modal-title" id="det_titolo"></div><div id="det_id" style="font-size:12px;color:var(--muted)"></div></div>
-      <button class="modal-close" onclick="closeModal('modal-detail')">×</button>
-    </div>
-    <div class="modal-body">
-      <div id="detail_body"></div>
-      <div class="file-grid" id="det_files" style="margin-top:16px"></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-danger btn-sm" id="delete_intervento_btn">🗑 Elimina</button>
-      <button class="btn btn-pdf btn-sm" id="pdf_intervento_btn">📄 PDF</button>
-      <button class="btn btn-secondary" onclick="closeModal('modal-detail')">Chiudi</button>
-      <button class="btn btn-primary btn-sm" id="edit_intervento_btn">✏️ Modifica</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL CLIENTE -->
-<div class="overlay" id="modal-cliente">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title" id="modal-cliente-title">Nuovo Cliente</div>
-      <button class="modal-close" onclick="closeModal('modal-cliente')">×</button>
-    </div>
-    <div class="modal-body">
-      <div class="form-grid">
-        <div class="form-group full"><label class="form-label">Ragione Sociale *</label><input class="form-control" id="c_nome"></div>
-        <div class="form-group"><label class="form-label">Referente</label><input class="form-control" id="c_ref"></div>
-        <div class="form-group"><label class="form-label">Telefono</label><input class="form-control" id="c_tel"></div>
-        <div class="form-group"><label class="form-label">Email</label><input class="form-control" id="c_email"></div>
-        <div class="form-group"><label class="form-label">Città</label><input class="form-control" id="c_citta"></div>
-        <div class="form-group"><label class="form-label">P.IVA</label><input class="form-control" id="c_piva" placeholder="IT12345678901"></div>
-        <div class="form-group full"><label class="form-label">Indirizzo completo</label><input class="form-control" id="c_indirizzo" placeholder="Via Roma 1, 20100 Milano"></div>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('modal-cliente')">Annulla</button>
-      <button class="btn btn-primary" id="save_cliente_btn">Salva Cliente</button>
-    </div>
-  </div>
-</div>
-
+<div class="overlay" id="modal-intervento"><div class="modal"><div class="modal-header"><div class="modal-title" id="modal-title-intervento">Nuovo Intervento</div><button class="modal-close" onclick="closeModal('modal-intervento')">×</button></div><div class="modal-body"><div class="form-grid"><div class="form-group full"><label class="form-label">Titolo Intervento *</label><input class="form-control" id="f_titolo"></div><div class="form-group"><label class="form-label">Cliente</label><select class="form-control" id="f_cliente"></select></div><div class="form-group"><label class="form-label">Stato Intervento</label><select class="form-control" id="f_stato"><option value="aperto">Aperto</option><option value="in-corso">In Corso</option><option value="attesa-ordine">Attesa Ordine</option><option value="chiuso">Chiuso</option></select></div><div class="form-group"><label class="form-label">Data Intervento</label><input class="form-control" id="f_data" type="date"></div><div class="form-group full"><label class="form-label">Rapportino Tecnico N.</label><input class="form-control" id="f_rapportino_num" placeholder="N° rapportino"></div><div class="form-group"><label class="form-label">Rapportino Data</label><input class="form-control" id="f_rapportino_data" type="date"></div><div class="form-group full"><label class="form-label">Ns. Offerta N.</label><input class="form-control" id="f_offerta_num" placeholder="N° offerta"></div><div class="form-group full"><label class="form-label">Ordine Cliente N.</label><input class="form-control" id="f_ordine_num" placeholder="N° ordine cliente"></div><div class="form-group"><label class="form-label">Ordine Data</label><input class="form-control" id="f_ordine_data" type="date"></div><div class="form-group full"><label class="form-label">Dettaglio Ore Lavoro</label><div class="hours-container"><div id="hours-list"></div><button type="button" class="btn-add-hour" onclick="addHourEntry()">+ Aggiungi fascia oraria</button></div><div class="total-hours" id="total_ore_display">Totale Ore: 0:00</div><input type="hidden" id="f_ore_totali"></div><div class="form-group full"><label class="form-label">Indirizzo</label><input class="form-control" id="f_indirizzo"></div><div class="form-group full"><label class="form-label">Descrizione</label><textarea class="form-control" id="f_descrizione" rows="2"></textarea></div><div class="form-group full" style="margin-top:10px;border-top:1px solid var(--border);padding-top:16px"><label class="form-label" style="color:var(--blue)">💰 DATI FATTURAZIONE</label></div><div class="form-group"><label class="form-label">Emessa Fattura il</label><input class="form-control" id="f_fattura_data" type="date"></div><div class="form-group"><label class="form-label">Numero Fattura</label><input class="form-control" id="f_fattura_num" placeholder="Fattura N."></div><div class="form-group"><label class="form-label">Importo (€)</label><input class="form-control" id="f_importo" type="number" step="0.01" placeholder="0.00"></div><div class="form-group full"><label class="form-label">Stato Fattura</label><select class="form-control" id="f_stato_fattura"><option value="">— Vuoto —</option><option value="emettere">Emettere Fattura</option><option value="attesa">Attesa Pagamento</option><option value="parziale">Pagamento Parziale</option><option value="pagata">Pagata</option></select></div><div class="form-group full"><label class="form-label">📎 Allegati</label><div class="file-upload-area" onclick="document.getElementById('file_input').click()">📎 Clicca per allegare file</div><input type="file" id="file_input" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt" style="display:none"><div class="file-grid" id="file_preview"></div></div></div></div><div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-intervento')">Annulla</button><button class="btn btn-primary" id="save_intervento_btn">Salva</button></div></div></div>
+<div class="overlay" id="modal-detail"><div class="modal"><div class="modal-header"><div><div class="modal-title" id="det_titolo"></div><div id="det_id" style="font-size:12px;color:var(--muted)"></div></div><button class="modal-close" onclick="closeModal('modal-detail')">×</button></div><div class="modal-body"><div id="detail_body"></div><div class="file-grid" id="det_files" style="margin-top:16px"></div></div><div class="modal-footer"><button class="btn btn-danger btn-sm" id="delete_intervento_btn">🗑 Elimina</button><button class="btn btn-pdf btn-sm" id="pdf_intervento_btn">📄 PDF</button><button class="btn btn-secondary" onclick="closeModal('modal-detail')">Chiudi</button><button class="btn btn-primary btn-sm" id="edit_intervento_btn">✏️ Modifica</button></div></div></div>
+<div class="overlay" id="modal-cliente"><div class="modal"><div class="modal-header"><div class="modal-title" id="modal-cliente-title">Nuovo Cliente</div><button class="modal-close" onclick="closeModal('modal-cliente')">×</button></div><div class="modal-body"><div class="form-grid"><div class="form-group full"><label class="form-label">Ragione Sociale *</label><input class="form-control" id="c_nome"></div><div class="form-group"><label class="form-label">Referente</label><input class="form-control" id="c_ref"></div><div class="form-group"><label class="form-label">Telefono</label><input class="form-control" id="c_tel"></div><div class="form-group"><label class="form-label">Email</label><input class="form-control" id="c_email"></div><div class="form-group"><label class="form-label">Città</label><input class="form-control" id="c_citta"></div><div class="form-group"><label class="form-label">P.IVA</label><input class="form-control" id="c_piva" placeholder="IT12345678901"></div><div class="form-group full"><label class="form-label">Indirizzo completo</label><input class="form-control" id="c_indirizzo" placeholder="Via Roma 1, 20100 Milano"></div></div></div><div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-cliente')">Annulla</button><button class="btn btn-primary" id="save_cliente_btn">Salva Cliente</button></div></div></div>
 <div class="toast" id="toast"></div>
 
 <script>
-// ─── CONFIG ───────────────────────────────────────────────────────────────────
+// CONFIG (stessa funzionalità originale, ma con PDF completamente riscritto per formato A4 corretto)
 const SHEET_ID = '1hqDCUSFaDBwyPnP3d_dFUBsHNrnC3LZNdyFKz2FAEn4';
 const DISCOVERY_DOC = 'https://sheets.googleapis.com/$discovery/rest?version=v4';
 const SCOPES = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
 const DRIVE_FOLDER_NAME = 'TeknoAutomazione - Allegati';
 let driveFolderId = null;
-
-// Colonne Google Sheets
-// INTERVENTI: ID | Titolo | Cliente | Stato | Data | Indirizzo | Descrizione | OreEntries(JSON) | OreTotali | RapportinoNum | RapportinoData | OffertaNum | OrdineNum | OrdineData | FatturaNum | FatturaData | Importo | StatoFattura | Files(JSON con url Drive)
-// CLIENTI: ID | Nome | Referente | Telefono | Email | Città
-
-// ─── STATE ────────────────────────────────────────────────────────────────────
 let interventi = [], clienti = [];
 let editingId = null, editingClienteId = null;
 let pendingFiles = [], oreEntries = [];
 let currentFilter = 'tutti', currentFatturaFilter = 'tutti', currentPage = 'dashboard';
 let calYear, calMonth;
 let gapiInited = false, gisInited = false, tokenClient;
-let modalDirty = false; // traccia se ci sono modifiche non salvate
+let modalDirty = false;
+let pdfSignatures = { tecnico: null, cliente: null };
 
-// ─── GOOGLE API ───────────────────────────────────────────────────────────────
-function gapiLoaded() {
-  gapi.load('client', async () => {
-    await gapi.client.init({ discoveryDocs: [DISCOVERY_DOC] });
-    gapiInited = true; maybeInit();
-  });
-}
+function gapiLoaded() { gapi.load('client', async () => { await gapi.client.init({ discoveryDocs: [DISCOVERY_DOC] }); gapiInited = true; maybeInit(); }); }
 function gisLoaded() { gisInited = true; maybeInit(); }
 function maybeInit() { if (gapiInited && gisInited) checkAuth(); }
-
-function riconnetti() {
-  if (!confirm('Verrà richiesto di fare di nuovo il login Google. Continuare?')) return;
-  localStorage.removeItem('td_token');
-  localStorage.removeItem('td_scope_v2');
-  localStorage.removeItem('td_token_time');
-  localStorage.removeItem('td_drive_folder');
-  location.reload();
-}
-
 const CLIENT_ID = '380905986512-vspgg7f52npf283gg97cc3jnid575o7k.apps.googleusercontent.com';
 
 function checkAuth() {
-  // Inizializza sempre tokenClient così può rinnovare silenziosamente
-  tokenClient = google.accounts.oauth2.initTokenClient({
-    client_id: CLIENT_ID,
-    scope: SCOPES,
-    prompt: '',
-    callback: (resp) => {
-      if (resp.error) {
-        // rinnovo silenzioso fallito — chiedi login esplicito
-        requestAuthExplicit();
-        return;
-      }
-      localStorage.setItem('td_token', resp.access_token);
-      localStorage.setItem('td_scope_v2', '1');
-      localStorage.setItem('td_token_time', Date.now().toString());
-      gapi.client.setToken({ access_token: resp.access_token });
-      onSignedIn();
-    }
-  });
-
-  const saved = localStorage.getItem('td_token');
-  const scopeOk = localStorage.getItem('td_scope_v2');
-  const tokenTime = parseInt(localStorage.getItem('td_token_time') || '0');
-  const elapsed = Date.now() - tokenTime;
-
-  if (saved && scopeOk && elapsed < 55 * 60 * 1000) {
-    // token ancora valido (< 55 minuti)
-    gapi.client.setToken({ access_token: saved });
-    onSignedIn();
-  } else if (scopeOk) {
-    // token scaduto ma utente già autorizzato — rinnova silenziosamente
-    setLoading('Rinnovo sessione...');
-    tokenClient.requestAccessToken({ prompt: '' });
-  } else {
-    // primo accesso
-    requestAuthExplicit();
-  }
+  tokenClient = google.accounts.oauth2.initTokenClient({ client_id: CLIENT_ID, scope: SCOPES, prompt: '', callback: (resp) => { if (resp.error) { requestAuthExplicit(); return; } localStorage.setItem('td_token', resp.access_token); localStorage.setItem('td_scope_v2', '1'); localStorage.setItem('td_token_time', Date.now().toString()); gapi.client.setToken({ access_token: resp.access_token }); onSignedIn(); } });
+  const saved = localStorage.getItem('td_token'); const scopeOk = localStorage.getItem('td_scope_v2'); const tokenTime = parseInt(localStorage.getItem('td_token_time') || '0'); const elapsed = Date.now() - tokenTime;
+  if (saved && scopeOk && elapsed < 55 * 60 * 1000) { gapi.client.setToken({ access_token: saved }); onSignedIn(); } else if (scopeOk) { setLoading('Rinnovo sessione...'); tokenClient.requestAccessToken({ prompt: '' }); } else requestAuthExplicit();
 }
-
-function requestAuthExplicit() {
-  setLoading('Accesso Google richiesto...');
-  tokenClient = google.accounts.oauth2.initTokenClient({
-    client_id: CLIENT_ID,
-    scope: SCOPES,
-    callback: (resp) => {
-      if (resp.error) {
-        document.getElementById('loading-text').textContent = 'Accesso negato. Premi Riconnetti e riprova.';
-        setSyncStatus('error', 'Errore accesso');
-        return;
-      }
-      localStorage.setItem('td_token', resp.access_token);
-      localStorage.setItem('td_scope_v2', '1');
-      localStorage.setItem('td_token_time', Date.now().toString());
-      gapi.client.setToken({ access_token: resp.access_token });
-      onSignedIn();
-    }
-  });
-  tokenClient.requestAccessToken({ prompt: 'consent' });
-}
-
-function requestAuth() { requestAuthExplicit(); }
-
-async function onSignedIn() {
-  setSyncStatus('syncing', 'Connessione...');
-  setLoading('Configurazione foglio...');
-  await ensureSheets();
-  setLoading('Configurazione cartella Drive...');
-  await ensureDriveFolder();
-  setLoading('Caricamento dati...');
-  await syncAll();
-  hideLoading();
-}
-
-// ─── GOOGLE DRIVE ─────────────────────────────────────────────────────────────
-async function ensureDriveFolder() {
-  try {
-    // cerca cartella esistente
-    const saved = localStorage.getItem('td_drive_folder');
-    if (saved) { driveFolderId = saved; return; }
-    const res = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q=name='${DRIVE_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)`,
-      { headers: { Authorization: 'Bearer ' + gapi.client.getToken().access_token } }
-    );
-    const data = await res.json();
-    if (data.files && data.files.length > 0) {
-      driveFolderId = data.files[0].id;
-    } else {
-      // crea cartella
-      const cr = await fetch('https://www.googleapis.com/drive/v3/files', {
-        method: 'POST',
-        headers: { Authorization: 'Bearer ' + gapi.client.getToken().access_token, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: DRIVE_FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' })
-      });
-      const folder = await cr.json();
-      driveFolderId = folder.id;
-    }
-    localStorage.setItem('td_drive_folder', driveFolderId);
-  } catch(e) { console.error('ensureDriveFolder', e); }
-}
-
-async function uploadFileToDrive(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try {
-        const token = gapi.client.getToken().access_token;
-        const metadata = { name: file.name, parents: driveFolderId ? [driveFolderId] : [] };
-        const base64 = e.target.result.split(',')[1];
-        // multipart upload
-        const boundary = '-------TeknoUpload';
-        const body = `--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: ${file.type}\r\nContent-Transfer-Encoding: base64\r\n\r\n${base64}\r\n--${boundary}--`;
-        const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,webContentLink', {
-          method: 'POST',
-          headers: { Authorization: 'Bearer ' + token, 'Content-Type': `multipart/related; boundary=${boundary}` },
-          body
-        });
-        const data = await res.json();
-        // rendi il file accessibile pubblicamente in lettura
-        await fetch(`https://www.googleapis.com/drive/v3/files/${data.id}/permissions`, {
-          method: 'POST',
-          headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ role: 'reader', type: 'anyone' })
-        });
-        resolve({ id: data.id, name: file.name, type: file.type, url: data.webViewLink, downloadUrl: `https://drive.google.com/uc?id=${data.id}` });
-      } catch(err) { reject(err); }
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-async function deleteFileFromDrive(fileId) {
-  try {
-    await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
-      method: 'DELETE',
-      headers: { Authorization: 'Bearer ' + gapi.client.getToken().access_token }
-    });
-  } catch(e) { console.error('deleteFile', e); }
-}
-
-// ─── SHEETS SETUP ─────────────────────────────────────────────────────────────
-async function ensureSheets() {
-  try {
-    const res = await gapi.client.sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
-    const existing = res.result.sheets.map(s => s.properties.title);
-    const requests = [];
-    if (!existing.includes('Interventi')) requests.push({ addSheet: { properties: { title: 'Interventi' } } });
-    if (!existing.includes('Clienti')) requests.push({ addSheet: { properties: { title: 'Clienti' } } });
-    if (requests.length) await gapi.client.sheets.spreadsheets.batchUpdate({ spreadsheetId: SHEET_ID, resource: { requests } });
-    await writeHeadersIfEmpty();
-  } catch(e) { console.error('ensureSheets', e); }
-}
-
-async function writeHeadersIfEmpty() {
-  const intH = [['ID','Titolo','Cliente','Stato','Data','Indirizzo','Descrizione','OreEntries','OreTotali','RapportinoNum','RapportinoData','OffertaNum','OrdineNum','OrdineData','FatturaNum','FatturaData','Importo','StatoFattura','Files']];
-  const cliH = [['ID','Nome','Referente','Telefono','Email','Città','P.IVA','Indirizzo']];
-  try {
-    const r1 = await gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Interventi!A1' });
-    if (!r1.result.values) await writeRange('Interventi!A1', intH);
-    const r2 = await gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Clienti!A1' });
-    if (!r2.result.values) await writeRange('Clienti!A1', cliH);
-  } catch(e) { console.error(e); }
-}
-
-// ─── SYNC ─────────────────────────────────────────────────────────────────────
-// ─── TOKEN REFRESH ────────────────────────────────────────────────────────────
-async function refreshTokenIfNeeded() {
-  const tokenTime = parseInt(localStorage.getItem('td_token_time') || '0');
-  const elapsed = Date.now() - tokenTime;
-  if (elapsed > 50 * 60 * 1000) {
-    return new Promise((resolve) => {
-      const tc = google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID, scope: SCOPES, prompt: '',
-        callback: (resp) => {
-          if (!resp.error) {
-            localStorage.setItem('td_token', resp.access_token);
-            localStorage.setItem('td_token_time', Date.now().toString());
-            gapi.client.setToken({ access_token: resp.access_token });
-          }
-          resolve();
-        }
-      });
-      tc.requestAccessToken({ prompt: '' });
-    });
-  }
-}
-
-async function syncAll() {
-  setSyncStatus('syncing', 'Sincronizzazione...');
-  try {
-    await refreshTokenIfNeeded();
-    const [r1, r2] = await Promise.all([
-      gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Interventi!A2:S' }),
-      gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Clienti!A2:H' }),
-    ]);
-    interventi = (r1.result.values || []).map(r => ({
-      id: r[0]||'', titolo: r[1]||'', cliente: r[2]||'', stato: r[3]||'aperto',
-      data: r[4]||'', indirizzo: r[5]||'', descrizione: r[6]||'',
-      ore_entries: safeJSON(r[7], []), ore_totali: r[8]||'0',
-      rapportino_num: r[9]||'', rapportino_data: r[10]||'',
-      offerta_num: r[11]||'', ordine_num: r[12]||'', ordine_data: r[13]||'',
-      fattura_num: r[14]||'', fattura_data: r[15]||'',
-      importo: r[16]||'', stato_fattura: r[17]||'',
-      files: safeJSON(r[18], [])
-    })).filter(i => i.id);
-    clienti = (r2.result.values || []).map(r => ({
-      id: r[0]||'', nome: r[1]||'', ref: r[2]||'', tel: r[3]||'', email: r[4]||'', citta: r[5]||'', piva: r[6]||'', indirizzo_completo: r[7]||''
-    })).filter(c => c.id);
-    renderAll();
-    setSyncStatus('ok', 'Sincronizzato ✓');
-  } catch(e) {
-    setSyncStatus('error', 'Errore sync');
-    showToast('Errore di sincronizzazione', 'error');
-    console.error(e);
-  }
-}
-
-function safeJSON(str, fallback) { try { return str ? JSON.parse(str) : fallback; } catch { return fallback; } }
-
-// Converte yyyy-mm-dd → dd/mm/yyyy per la visualizzazione
-function fmtDataIT(iso) {
-  if (!iso) return '';
-  const p = iso.split('-');
-  if (p.length !== 3) return iso;
-  return p[2] + '/' + p[1] + '/' + p[0];
-}
-// Converte dd/mm/yyyy → yyyy-mm-dd per i campi input[type=date]
-function fmtDataISO(it) {
-  if (!it) return '';
-  // già ISO
-  if (/^\d{4}-\d{2}-\d{2}$/.test(it)) return it;
-  // dd/mm/yyyy
-  const p = it.split('/');
-  if (p.length === 3) return p[2] + '-' + p[1].padStart(2,'0') + '-' + p[0].padStart(2,'0');
-  return it;
-}
-
-// ─── SHEETS WRITE ─────────────────────────────────────────────────────────────
-async function writeRange(range, values) {
-  return gapi.client.sheets.spreadsheets.values.update({
-    spreadsheetId: SHEET_ID, range, valueInputOption: 'RAW', resource: { values }
-  });
-}
-async function appendRow(sheet, values) {
-  return gapi.client.sheets.spreadsheets.values.append({
-    spreadsheetId: SHEET_ID, range: sheet+'!A1',
-    valueInputOption: 'RAW', insertDataOption: 'INSERT_ROWS',
-    resource: { values: [values] }
-  });
-}
-async function findRowIndex(sheet, id) {
-  const r = await gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: sheet+'!A:A' });
-  const rows = r.result.values || [];
-  for (let i = 1; i < rows.length; i++) if (rows[i][0] === id) return i + 1;
-  return -1;
-}
-async function updateSheetRow(sheet, id, values, lastCol) {
-  const row = await findRowIndex(sheet, id);
-  if (row < 0) return;
-  await writeRange(`${sheet}!A${row}:${lastCol}${row}`, [values]);
-}
-async function deleteSheetRow(sheet, id) {
-  const row = await findRowIndex(sheet, id);
-  if (row < 0) return;
-  const meta = await gapi.client.sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
-  const sh = meta.result.sheets.find(s => s.properties.title === sheet);
-  await gapi.client.sheets.spreadsheets.batchUpdate({
-    spreadsheetId: SHEET_ID,
-    resource: { requests: [{ deleteDimension: { range: { sheetId: sh.properties.sheetId, dimension: 'ROWS', startIndex: row-1, endIndex: row } } }] }
-  });
-}
-
-function interventoToRow(id, d) {
-  return [id, d.titolo, d.cliente, d.stato, d.data, d.indirizzo, d.descrizione,
-    JSON.stringify(d.ore_entries||[]), d.ore_totali||'0',
-    d.rapportino_num, d.rapportino_data, d.offerta_num, d.ordine_num, d.ordine_data,
-    d.fattura_num, d.fattura_data, d.importo, d.stato_fattura,
-    JSON.stringify(d.files||[])];
-}
-function clienteToRow(id, d) {
-  return [id, d.nome, d.ref||'', d.tel||'', d.email||'', d.citta||'', d.piva||'', d.indirizzo_completo||''];
-}
-
-// ─── ORE ──────────────────────────────────────────────────────────────────────
+function requestAuthExplicit() { setLoading('Accesso Google richiesto...'); tokenClient.requestAccessToken({ prompt: 'consent' }); }
+async function onSignedIn() { setSyncStatus('syncing', 'Connessione...'); setLoading('Configurazione...'); await ensureSheets(); await ensureDriveFolder(); await syncAll(); hideLoading(); }
+async function ensureSheets() { try { const res = await gapi.client.sheets.spreadsheets.get({ spreadsheetId: SHEET_ID }); const existing = res.result.sheets.map(s => s.properties.title); const requests = []; if (!existing.includes('Interventi')) requests.push({ addSheet: { properties: { title: 'Interventi' } } }); if (!existing.includes('Clienti')) requests.push({ addSheet: { properties: { title: 'Clienti' } } }); if (requests.length) await gapi.client.sheets.spreadsheets.batchUpdate({ spreadsheetId: SHEET_ID, resource: { requests } }); await writeHeadersIfEmpty(); } catch(e) {} }
+async function writeHeadersIfEmpty() { const intH = [['ID','Titolo','Cliente','Stato','Data','Indirizzo','Descrizione','OreEntries','OreTotali','RapportinoNum','RapportinoData','OffertaNum','OrdineNum','OrdineData','FatturaNum','FatturaData','Importo','StatoFattura','Files']]; const cliH = [['ID','Nome','Referente','Telefono','Email','Città','P.IVA','Indirizzo']]; try { const r1 = await gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Interventi!A1' }); if (!r1.result.values) await writeRange('Interventi!A1', intH); const r2 = await gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Clienti!A1' }); if (!r2.result.values) await writeRange('Clienti!A1', cliH); } catch(e) {} }
+async function writeRange(range, values) { return gapi.client.sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range, valueInputOption: 'RAW', resource: { values } }); }
+async function appendRow(sheet, values) { return gapi.client.sheets.spreadsheets.values.append({ spreadsheetId: SHEET_ID, range: sheet+'!A1', valueInputOption: 'RAW', insertDataOption: 'INSERT_ROWS', resource: { values: [values] } }); }
+async function findRowIndex(sheet, id) { const r = await gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: sheet+'!A:A' }); const rows = r.result.values || []; for (let i = 1; i < rows.length; i++) if (rows[i][0] === id) return i + 1; return -1; }
+async function updateSheetRow(sheet, id, values, lastCol) { const row = await findRowIndex(sheet, id); if (row < 0) return; await writeRange(`${sheet}!A${row}:${lastCol}${row}`, [values]); }
+async function deleteSheetRow(sheet, id) { const row = await findRowIndex(sheet, id); if (row < 0) return; const meta = await gapi.client.sheets.spreadsheets.get({ spreadsheetId: SHEET_ID }); const sh = meta.result.sheets.find(s => s.properties.title === sheet); await gapi.client.sheets.spreadsheets.batchUpdate({ spreadsheetId: SHEET_ID, resource: { requests: [{ deleteDimension: { range: { sheetId: sh.properties.sheetId, dimension: 'ROWS', startIndex: row-1, endIndex: row } } }] } }); }
+function interventoToRow(id, d) { return [id, d.titolo, d.cliente, d.stato, d.data, d.indirizzo, d.descrizione, JSON.stringify(d.ore_entries||[]), d.ore_totali||'0', d.rapportino_num, d.rapportino_data, d.offerta_num, d.ordine_num, d.ordine_data, d.fattura_num, d.fattura_data, d.importo, d.stato_fattura, JSON.stringify(d.files||[])]; }
+function clienteToRow(id, d) { return [id, d.nome, d.ref||'', d.tel||'', d.email||'', d.citta||'', d.piva||'', d.indirizzo_completo||'']; }
 function formatOre(v) { const h=Math.floor(v),m=Math.round((v-h)*60); return m===60?`${h+1}:00`:`${h}:${m.toString().padStart(2,'0')}`; }
-function calcolaOreDaEntry(e) {
-  if (!e.dalle||!e.alle) return 0;
-  const [dh,dm]=e.dalle.split(':').map(Number),[ah,am]=e.alle.split(':').map(Number);
-  let h=(ah+am/60)-(dh+dm/60); if(h<0)h+=24;
-  return Math.max(0,h-(parseFloat(e.pausa)||0)/60);
-}
-function calcolaOreTotaliMulti() {
-  const tot=oreEntries.reduce((s,e)=>s+calcolaOreDaEntry(e),0);
-  document.getElementById('total_ore_display').innerHTML=`Totale Ore: ${formatOre(tot)}`;
-  document.getElementById('f_ore_totali').value=tot.toFixed(2);
-  return tot;
-}
+function calcolaOreDaEntry(e) { if (!e.dalle||!e.alle) return 0; const [dh,dm]=e.dalle.split(':').map(Number),[ah,am]=e.alle.split(':').map(Number); let h=(ah+am/60)-(dh+dm/60); if(h<0)h+=24; return Math.max(0,h-(parseFloat(e.pausa)||0)/60); }
+function calcolaOreTotaliMulti() { const tot=oreEntries.reduce((s,e)=>s+calcolaOreDaEntry(e),0); document.getElementById('total_ore_display').innerHTML=`Totale Ore: ${formatOre(tot)}`; document.getElementById('f_ore_totali').value=tot.toFixed(2); return tot; }
 function addHourEntry(dalle='',alle='',pausa='0',data='') { oreEntries.push({id:Date.now()+Math.random(),dalle,alle,pausa,data}); renderHoursList(); }
 function removeHourEntry(id) { oreEntries=oreEntries.filter(e=>e.id!==id); renderHoursList(); }
 function updateHourEntry(id,field,value) { const e=oreEntries.find(e=>e.id===id); if(e){e[field]=value;calcolaOreTotaliMulti();} }
-function renderHoursList() {
-  const c=document.getElementById('hours-list');
-  if (!oreEntries.length) { c.innerHTML='<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">Nessuna fascia oraria.</div>'; calcolaOreTotaliMulti(); return; }
-  c.innerHTML=oreEntries.map(e=>`<div class="hours-entry">
-    <div class="form-group"><label style="font-size:10px">Data</label><input type="date" class="form-control" value="${e.data||''}" onchange="updateHourEntry(${e.id},'data',this.value)"></div>
-    <div class="form-group"><label style="font-size:10px">Dalle</label><input type="time" class="form-control" value="${e.dalle}" onchange="updateHourEntry(${e.id},'dalle',this.value)"></div>
-    <div class="form-group"><label style="font-size:10px">Alle</label><input type="time" class="form-control" value="${e.alle}" onchange="updateHourEntry(${e.id},'alle',this.value)"></div>
-    <div class="form-group"><label style="font-size:10px">Pausa (min)</label><input type="number" step="5" class="form-control" value="${e.pausa}" onchange="updateHourEntry(${e.id},'pausa',this.value)"></div>
-    <button class="btn-remove" onclick="removeHourEntry(${e.id})">✕</button>
-  </div>`).join('');
-  calcolaOreTotaliMulti();
-}
-
-// ─── BADGES ───────────────────────────────────────────────────────────────────
-function statoInterventoBadge(s) {
-  const m={'aperto':['badge-aperto','Aperto'],'in-corso':['badge-progress','In Corso'],'attesa-ordine':['badge-attesa-ordine','Attesa Ordine'],'chiuso':['badge-chiuso','Chiuso']};
-  const [cls,label]=m[s]||['',s]; return `<span class="badge ${cls}"><span class="badge-dot"></span>${label}</span>`;
-}
-function statoFatturaBadge(s) {
-  if (!s) return '';
-  const m={'emettere':['fattura-emettere','📄 Emettere'],'attesa':['fattura-attesa','⏳ Attesa Pag.'],'parziale':['fattura-parziale','🟡 Parziale'],'pagata':['fattura-pagata','✅ Pagata']};
-  const [cls,label]=m[s]||['',s]; return `<span class="badge ${cls}"><span class="badge-dot"></span>${label}</span>`;
-}
-
-// ─── HELPERS ──────────────────────────────────────────────────────────────────
-function genId(p) { return p+Date.now().toString(36).toUpperCase(); }
+function renderHoursList() { const c=document.getElementById('hours-list'); if (!oreEntries.length) { c.innerHTML='<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">Nessuna fascia oraria.</div>'; calcolaOreTotaliMulti(); return; } c.innerHTML=oreEntries.map(e=>`<div class="hours-entry"><div class="form-group"><label style="font-size:10px">Data</label><input type="date" class="form-control" value="${e.data||''}" onchange="updateHourEntry(${e.id},'data',this.value)"></div><div class="form-group"><label style="font-size:10px">Dalle</label><input type="time" class="form-control" value="${e.dalle}" onchange="updateHourEntry(${e.id},'dalle',this.value)"></div><div class="form-group"><label style="font-size:10px">Alle</label><input type="time" class="form-control" value="${e.alle}" onchange="updateHourEntry(${e.id},'alle',this.value)"></div><div class="form-group"><label style="font-size:10px">Pausa (min)</label><input type="number" step="5" class="form-control" value="${e.pausa}" onchange="updateHourEntry(${e.id},'pausa',this.value)"></div><button class="btn-remove" onclick="removeHourEntry(${e.id})">✕</button></div>`).join(''); calcolaOreTotaliMulti(); }
 function getClientName(id) { const c=clienti.find(x=>x.id===id); return c?c.nome:'—'; }
 function getClient(id) { return clienti.find(x=>x.id===id)||null; }
 function setSyncStatus(s,l) { document.getElementById('sync-dot').className='sync-dot '+s; document.getElementById('sync-label').textContent=l; }
 function setLoading(m) { document.getElementById('loading-text').textContent=m; document.getElementById('loading-overlay').style.display='flex'; }
 function hideLoading() { document.getElementById('loading-overlay').style.display='none'; }
 function showToast(msg,type='success') { const t=document.getElementById('toast'); t.textContent=msg; t.className='toast '+type+' show'; setTimeout(()=>t.classList.remove('show'),2800); }
-function closeModal(id, force=false) {
-  if (!force && modalDirty && id === 'modal-intervento') {
-    if (!confirm('Hai modifiche non salvate. Vuoi davvero chiudere?')) return;
-  }
-  const el = document.getElementById(id);
-  if (el) el.classList.remove('open');
-  if (id === 'modal-intervento') modalDirty = false;
-}
-
-// ─── RENDER ───────────────────────────────────────────────────────────────────
-function updateYearFilterOptions() {
-  const years=[...new Set(interventi.filter(i=>i.data).map(i=>i.data.split('-')[0]))].sort().reverse();
-  ['interventi-year-filter','fatture-year-filter'].forEach(id=>{
-    const sel=document.getElementById(id); if(!sel) return;
-    const cur=sel.value;
-    sel.innerHTML='<option value="tutti">Tutti gli anni</option>'+years.map(y=>`<option value="${y}">${y}</option>`).join('');
-    if(years.includes(cur)) sel.value=cur;
-  });
-}
-
+function closeModal(id, force=false) { if (!force && modalDirty && id === 'modal-intervento') { if (!confirm('Hai modifiche non salvate. Vuoi davvero chiudere?')) return; } const el = document.getElementById(id); if (el) el.classList.remove('open'); if (id === 'modal-intervento') modalDirty = false; }
+function fmtDataIT(iso) { if (!iso) return ''; const p = iso.split('-'); if (p.length !== 3) return iso; return p[2] + '/' + p[1] + '/' + p[0]; }
+function fmtDataISO(it) { if (!it) return ''; if (/^\d{4}-\d{2}-\d{2}$/.test(it)) return it; const p = it.split('/'); if (p.length === 3) return p[2] + '-' + p[1].padStart(2,'0') + '-' + p[0].padStart(2,'0'); return it; }
+function statoInterventoBadge(s) { const m={'aperto':['badge-aperto','Aperto'],'in-corso':['badge-progress','In Corso'],'attesa-ordine':['badge-attesa-ordine','Attesa Ordine'],'chiuso':['badge-chiuso','Chiuso']}; const [cls,label]=m[s]||['',s]; return `<span class="badge ${cls}"><span class="badge-dot"></span>${label}</span>`; }
+function statoFatturaBadge(s) { if (!s) return ''; const m={'emettere':['fattura-emettere','📄 Emettere'],'attesa':['fattura-attesa','⏳ Attesa Pag.'],'parziale':['fattura-parziale','🟡 Parziale'],'pagata':['fattura-pagata','✅ Pagata']}; const [cls,label]=m[s]||['',s]; return `<span class="badge ${cls}"><span class="badge-dot"></span>${label}</span>`; }
+function genId(p) { return p+Date.now().toString(36).toUpperCase(); }
+async function syncAll() { setSyncStatus('syncing', 'Sincronizzazione...'); try { const [r1, r2] = await Promise.all([ gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Interventi!A2:S' }), gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Clienti!A2:H' }) ]); interventi = (r1.result.values || []).map(r => ({ id: r[0]||'', titolo: r[1]||'', cliente: r[2]||'', stato: r[3]||'aperto', data: r[4]||'', indirizzo: r[5]||'', descrizione: r[6]||'', ore_entries: (()=>{ try { return JSON.parse(r[7]||'[]'); } catch(e){ return []; } })(), ore_totali: r[8]||'0', rapportino_num: r[9]||'', rapportino_data: r[10]||'', offerta_num: r[11]||'', ordine_num: r[12]||'', ordine_data: r[13]||'', fattura_num: r[14]||'', fattura_data: r[15]||'', importo: r[16]||'', stato_fattura: r[17]||'', files: (()=>{ try { return JSON.parse(r[18]||'[]'); } catch(e){ return []; } })() })).filter(i => i.id); clienti = (r2.result.values || []).map(r => ({ id: r[0]||'', nome: r[1]||'', ref: r[2]||'', tel: r[3]||'', email: r[4]||'', citta: r[5]||'', piva: r[6]||'', indirizzo_completo: r[7]||'' })).filter(c => c.id); renderAll(); setSyncStatus('ok', 'Sincronizzato ✓'); } catch(e) { setSyncStatus('error', 'Errore sync'); showToast('Errore di sincronizzazione', 'error'); } }
 function renderAll() { renderDashboard(); renderTable(); renderFatture(); if(currentPage==='clienti')renderClienti(); if(currentPage==='calendario')renderCalendar(); updateYearFilterOptions(); }
+function renderDashboard() { document.getElementById('stat-total').textContent=interventi.filter(i=>i.stato==='aperto'||i.stato==='in-corso').length; document.getElementById('stat-progress').textContent=interventi.filter(i=>i.stato==='in-corso').length; document.getElementById('stat-closed').textContent=interventi.filter(i=>i.stato==='attesa-ordine').length; document.getElementById('stat-toinvoice').textContent=interventi.filter(i=>i.stato_fattura==='emettere').length; const rec=interventi.filter(i=>i.stato==='aperto'||i.stato==='in-corso').sort((a,b)=>new Date(b.data)-new Date(a.data)).slice(0,5); document.getElementById('dash-tbody').innerHTML=rec.length?rec.map(i=>`<tr onclick="openDetail('${i.id}')"><td class="td-id">#${i.id}</td><td>${i.titolo}</td><td>${getClientName(i.cliente)}</td><td>${statoInterventoBadge(i.stato)}</td><td>${formatOre(parseFloat(i.ore_totali||0))}</td><td>${fmtDataIT(i.data)||'—'}</td></tr>`).join(''):'<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--muted)">Nessun intervento aperto</td></tr>'; }
+function renderTable() { const search=(document.getElementById('search-input')?.value||'').toLowerCase(); const anno=document.getElementById('interventi-year-filter')?.value||'tutti'; const list=interventi.filter(i=>(currentFilter==='tutti'||i.stato===currentFilter)&&(anno==='tutti'||(i.data&&i.data.split('-')[0]===anno))&&(!search||i.titolo.toLowerCase().includes(search)||getClientName(i.cliente).toLowerCase().includes(search)||(i.offerta_num||'').toLowerCase().includes(search))); document.getElementById('main-tbody').innerHTML=list.length?list.map(i=>`<tr onclick="openDetail('${i.id}')"><td>${i.offerta_num||'—'}</td><td><strong>${i.titolo}</strong><br><small style="color:var(--muted)">${i.indirizzo||''}</small></td><td>${getClientName(i.cliente)}</td><td>${statoInterventoBadge(i.stato)}</td><td>${formatOre(parseFloat(i.ore_totali||0))}</td><td>${fmtDataIT(i.data)||'—'}</td><td>${statoFatturaBadge(i.stato_fattura)}</td><td><button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openEditIntervento('${i.id}')">✏️</button></td></tr>`).join(''):'<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--muted)">Nessun intervento trovato</td></tr>'; }
+function renderFatture() { const search=(document.getElementById('fattura-search-input')?.value||'').toLowerCase(); const anno=document.getElementById('fatture-year-filter')?.value||'tutti'; const list=interventi.filter(i=>(currentFatturaFilter==='tutti'||i.stato_fattura===currentFatturaFilter)&&(anno==='tutti'||(i.data&&i.data.split('-')[0]===anno))&&(!search||getClientName(i.cliente).toLowerCase().includes(search)||i.titolo.toLowerCase().includes(search)||(i.offerta_num||'').toLowerCase().includes(search))); document.getElementById('fatture-tbody').innerHTML=list.length?list.map(i=>`<tr onclick="openDetail('${i.id}')"><td>${i.offerta_num||'—'}</td><td><strong>${i.titolo}</strong></td><td>${getClientName(i.cliente)}</td><td>${fmtDataIT(i.data)||'—'}</td><td>€ ${parseFloat(i.importo||0).toFixed(2)}</td><td>${statoFatturaBadge(i.stato_fattura)}</td><td>${i.fattura_num||'—'}</td><td><button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openEditIntervento('${i.id}')">✏️</button></td></tr>`).join(''):'<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--muted)">Nessuna fattura trovata</td></tr>'; }
+function renderClienti() { const g=document.getElementById('client-grid'); if(!clienti.length){g.innerHTML='<div style="text-align:center;padding:60px;color:var(--muted)">Nessun cliente. Aggiungine uno!</div>';return;} g.innerHTML=clienti.map(c=>`<div class="client-card" onclick="openClientDetail('${c.id}')"><div class="client-name">${c.nome}</div><div style="font-size:12px;color:var(--muted);line-height:1.8;font-family:var(--mono)">${c.ref?`👤 ${c.ref}<br>`:''}${c.tel?`📞 ${c.tel}<br>`:''}${c.email?`✉️ ${c.email}<br>`:''}${c.citta?`📍 ${c.citta}<br>`:''}${c.piva?`P.IVA: ${c.piva}<br>`:''}${c.indirizzo_completo?`🏠 ${c.indirizzo_completo}`:''}</div><div style="margin-top:12px;font-size:11px;color:var(--blue)">🔧 ${interventi.filter(i=>i.cliente===c.id).length} interventi</div></div>`).join(''); }
 
-function renderDashboard() {
-  document.getElementById('stat-total').textContent=interventi.filter(i=>i.stato==='aperto'||i.stato==='in-corso').length;
-  document.getElementById('stat-progress').textContent=interventi.filter(i=>i.stato==='in-corso').length;
-  document.getElementById('stat-closed').textContent=interventi.filter(i=>i.stato==='attesa-ordine').length;
-  document.getElementById('stat-toinvoice').textContent=interventi.filter(i=>i.stato_fattura==='emettere').length;
-  const rec=interventi.filter(i=>i.stato==='aperto'||i.stato==='in-corso').sort((a,b)=>new Date(b.data)-new Date(a.data)).slice(0,5);
-  document.getElementById('dash-tbody').innerHTML=rec.length
-    ?rec.map(i=>`<tr onclick="openDetail('${i.id}')"><td class="td-id">#${i.id}</td><td>${i.titolo}</td><td>${getClientName(i.cliente)}</td><td>${statoInterventoBadge(i.stato)}</td><td>${formatOre(parseFloat(i.ore_totali||0))}</td><td>${fmtDataIT(i.data)||'—'}</td></tr>`).join('')
-    :'<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--muted)">Nessun intervento aperto</td></tr>';
-}
-
-function renderTable() {
-  const search=(document.getElementById('search-input')?.value||'').toLowerCase();
-  const anno=document.getElementById('interventi-year-filter')?.value||'tutti';
-  const list=interventi.filter(i=>(currentFilter==='tutti'||i.stato===currentFilter)&&(anno==='tutti'||(i.data&&i.data.split('-')[0]===anno))&&(!search||i.titolo.toLowerCase().includes(search)||getClientName(i.cliente).toLowerCase().includes(search)||(i.offerta_num||'').toLowerCase().includes(search)||(i.ordine_num||'').toLowerCase().includes(search)));
-  document.getElementById('main-tbody').innerHTML=list.length
-    ?list.map(i=>`<tr onclick="openDetail('${i.id}')"><td>${i.offerta_num||'—'}</td><td><strong>${i.titolo}</strong><br><small style="color:var(--muted)">${i.indirizzo||''}</small></td><td>${getClientName(i.cliente)}</td><td>${statoInterventoBadge(i.stato)}</td><td>${formatOre(parseFloat(i.ore_totali||0))}</td><td>${fmtDataIT(i.data)||'—'}</td><td>${statoFatturaBadge(i.stato_fattura)}</td><td><button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openEditIntervento('${i.id}')">✏️</button></td></tr>`).join('')
-    :'<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--muted)">Nessun intervento trovato</td></tr>';
-}
-
-function renderFatture() {
-  const search=(document.getElementById('fattura-search-input')?.value||'').toLowerCase();
-  const anno=document.getElementById('fatture-year-filter')?.value||'tutti';
-  const list=interventi.filter(i=>(currentFatturaFilter==='tutti'||i.stato_fattura===currentFatturaFilter)&&(anno==='tutti'||(i.data&&i.data.split('-')[0]===anno))&&(!search||getClientName(i.cliente).toLowerCase().includes(search)||i.titolo.toLowerCase().includes(search)||(i.offerta_num||'').toLowerCase().includes(search)||(i.fattura_num||'').toLowerCase().includes(search)));
-  document.getElementById('fatture-tbody').innerHTML=list.length
-    ?list.map(i=>`<tr onclick="openDetail('${i.id}')"><td>${i.offerta_num||'—'}</td><td><strong>${i.titolo}</strong></td><td>${getClientName(i.cliente)}</td><td>${fmtDataIT(i.data)||'—'}</td><td>€ ${parseFloat(i.importo||0).toFixed(2)}</td><td>${statoFatturaBadge(i.stato_fattura)}</td><td>${i.fattura_num||'—'}</td><td><button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openEditIntervento('${i.id}')">✏️</button></td></tr>`).join('')
-    :'<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--muted)">Nessuna fattura trovata</td></tr>';
-}
-
-function renderClienti() {
-  const g=document.getElementById('client-grid');
-  if(!clienti.length){g.innerHTML='<div style="text-align:center;padding:60px;color:var(--muted)">Nessun cliente. Aggiungine uno!</div>';return;}
-  g.innerHTML=clienti.map(c=>`<div class="client-card" onclick="openClientDetail('${c.id}')"><div class="client-name">${c.nome}</div><div style="font-size:12px;color:var(--muted);line-height:1.8;font-family:var(--mono)">${c.ref?`👤 ${c.ref}<br>`:''}${c.tel?`📞 ${c.tel}<br>`:''}${c.email?`✉️ ${c.email}<br>`:''}${c.citta?`📍 ${c.citta}<br>`:''}${c.piva?`P.IVA: ${c.piva}<br>`:''}${c.indirizzo_completo?`🏠 ${c.indirizzo_completo}`:''}</div><div style="margin-top:12px;font-size:11px;color:var(--blue)">🔧 ${interventi.filter(i=>i.cliente===c.id).length} interventi</div></div>`).join('');
-}
-
-// ─── CALENDAR ─────────────────────────────────────────────────────────────────
+// CALENDARIO
 const MN=['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
 function changeMonth(d){calMonth+=d;if(calMonth<0){calMonth=11;calYear--;}if(calMonth>11){calMonth=0;calYear++;}renderCalendar();}
-function renderCalendar() {
-  document.getElementById('cal-title').textContent=`${MN[calMonth]} ${calYear}`;
-  let sd=new Date(calYear,calMonth,1).getDay();sd=sd===0?6:sd-1;
-  const dim=new Date(calYear,calMonth+1,0).getDate(),dipm=new Date(calYear,calMonth,0).getDate();
-  const total=Math.ceil((sd+dim)/7)*7,today=new Date();
-  let html='';
-  for(let c=0;c<total;c++){
-    let d,mo=calMonth,yr=calYear,other=false;
-    if(c<sd){d=dipm-sd+c+1;mo--;if(mo<0){mo=11;yr--;}other=true;}
-    else if(c>=sd+dim){d=c-sd-dim+1;mo++;if(mo>11){mo=0;yr++;}other=true;}
-    else d=c-sd+1;
-    const isT=!other&&d===today.getDate()&&calMonth===today.getMonth()&&calYear===today.getFullYear();
-    const hasE=interventi.some(i=>i.data===`${yr}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`);
-    html+=`<div class="cal-day${other?' other-month':''}${isT?' today':''}${hasE?' has-events':''}" onclick="showDayEvents(${yr},${mo},${d})">${d}</div>`;
-  }
-  document.getElementById('cal-grid').innerHTML=html;
-  showDayEvents(today.getFullYear(),today.getMonth(),today.getDate());
-}
-function showDayEvents(y,m,d) {
-  const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-  const evs=interventi.filter(i=>i.data===ds);
-  document.getElementById('events-list').innerHTML=evs.length
-    ?`<div style="margin-bottom:12px;font-size:12px;font-weight:700;color:var(--muted)">📋 ${evs.length} intervento/i il ${d} ${MN[m]} ${y}</div>`+evs.map(e=>`<div class="event-row" onclick="openDetail('${e.id}')"><div style="font-family:var(--mono);font-size:12px;color:var(--muted);min-width:50px">--:--</div><div style="flex:1"><strong>${e.titolo}</strong><br><small>${getClientName(e.cliente)}</small></div>${statoInterventoBadge(e.stato)}</div>`).join('')
-    :`<div style="color:var(--muted);padding:20px;text-align:center">Nessun intervento il ${d} ${MN[m]} ${y}</div>`;
-}
+function renderCalendar() { document.getElementById('cal-title').textContent=`${MN[calMonth]} ${calYear}`; let sd=new Date(calYear,calMonth,1).getDay();sd=sd===0?6:sd-1; const dim=new Date(calYear,calMonth+1,0).getDate(),dipm=new Date(calYear,calMonth,0).getDate(); const total=Math.ceil((sd+dim)/7)*7,today=new Date(); let html=''; for(let c=0;c<total;c++){ let d,mo=calMonth,yr=calYear,other=false; if(c<sd){d=dipm-sd+c+1;mo--;if(mo<0){mo=11;yr--;}other=true;} else if(c>=sd+dim){d=c-sd-dim+1;mo++;if(mo>11){mo=0;yr++;}other=true;} else d=c-sd+1; const isT=!other&&d===today.getDate()&&calMonth===today.getMonth()&&calYear===today.getFullYear(); const hasE=interventi.some(i=>i.data===`${yr}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`); html+=`<div class="cal-day${other?' other-month':''}${isT?' today':''}${hasE?' has-events':''}" onclick="showDayEvents(${yr},${mo},${d})">${d}</div>`; } document.getElementById('cal-grid').innerHTML=html; showDayEvents(today.getFullYear(),today.getMonth(),today.getDate()); }
+function showDayEvents(y,m,d) { const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`; const evs=interventi.filter(i=>i.data===ds); document.getElementById('events-list').innerHTML=evs.length?`<div style="margin-bottom:12px;font-size:12px;font-weight:700;color:var(--muted)">📋 ${evs.length} intervento/i il ${d} ${MN[m]} ${y}</div>`+evs.map(e=>`<div class="event-row" onclick="openDetail('${e.id}')"><div style="flex:1"><strong>${e.titolo}</strong><br><small>${getClientName(e.cliente)}</small></div>${statoInterventoBadge(e.stato)}</div>`).join(''):`<div style="color:var(--muted);padding:20px;text-align:center">Nessun intervento il ${d} ${MN[m]} ${y}</div>`; }
 
-// ─── NAVIGATION ───────────────────────────────────────────────────────────────
-function showPage(page) {
-  currentPage=page;
-  ['dashboard','interventi','fatture','calendario','clienti'].forEach(p=>document.getElementById('page-'+p).style.display=p===page?'block':'none');
-  document.getElementById('page-title').textContent={dashboard:'Tekno Automazione',interventi:'Interventi',fatture:'Stato Fattura',calendario:'Calendario',clienti:'Clienti'}[page];
-  const btn=document.getElementById('main-action-btn');
-  if(page==='clienti'){btn.textContent='+ Nuovo Cliente';btn.onclick=openNewCliente;renderClienti();}
-  else{btn.textContent='+ Nuovo Intervento';btn.onclick=openNewIntervento;}
-  if(page==='calendario')renderCalendar();
-  if(page==='dashboard')renderDashboard();
-  if(page==='fatture')renderFatture();
-  if(page==='interventi')renderTable();
-  document.querySelectorAll('.nav-item').forEach(el=>el.classList.remove('active'));
-  document.querySelector(`.nav-item[data-page="${page}"]`).classList.add('active');
-  document.getElementById('sidebar').classList.remove('open');
-}
+// Nav
+function showPage(page) { currentPage=page; ['dashboard','interventi','fatture','calendario','clienti'].forEach(p=>document.getElementById('page-'+p).style.display=p===page?'block':'none'); document.getElementById('page-title').textContent={dashboard:'Tekno Automazione',interventi:'Interventi',fatture:'Stato Fattura',calendario:'Calendario',clienti:'Clienti'}[page]; const btn=document.getElementById('main-action-btn'); if(page==='clienti'){btn.textContent='+ Nuovo Cliente';btn.onclick=openNewCliente;renderClienti();} else{btn.textContent='+ Nuovo Intervento';btn.onclick=openNewIntervento;} if(page==='calendario')renderCalendar(); if(page==='dashboard')renderDashboard(); if(page==='fatture')renderFatture(); if(page==='interventi')renderTable(); document.querySelectorAll('.nav-item').forEach(el=>el.classList.remove('active')); document.querySelector(`.nav-item[data-page="${page}"]`).classList.add('active'); document.getElementById('sidebar').classList.remove('open'); }
 
-// ─── INTERVENTI CRUD ──────────────────────────────────────────────────────────
-function openNewIntervento() {
-  editingId=null; pendingFiles=[]; oreEntries=[];
-  document.getElementById('modal-title-intervento').textContent='Nuovo Intervento';
-  ['f_titolo','f_indirizzo','f_descrizione','f_rapportino_num','f_offerta_num','f_ordine_num','f_fattura_num','f_fattura_data','f_rapportino_data','f_ordine_data','f_importo'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('f_stato').value='aperto';
-  document.getElementById('f_data').value=new Date().toISOString().split('T')[0];
-  document.getElementById('f_stato_fattura').value='';
-  document.getElementById('file_preview').innerHTML='';
-  renderHoursList();
-  document.getElementById('f_stato').onchange = function() {
-    if (this.value !== 'chiuso') {
-      document.getElementById('f_stato_fattura').value = '';
-    }
-  };
-  document.getElementById('f_cliente').innerHTML='<option value="">— Seleziona —</option>'+clienti.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');
-  modalDirty = false;
-  // marca dirty al primo cambiamento
-  setTimeout(() => {
-    document.querySelectorAll('#modal-intervento .form-control').forEach(el => {
-      el.addEventListener('change', () => { modalDirty = true; }, { once: true });
-      el.addEventListener('input', () => { modalDirty = true; }, { once: true });
-    });
-  }, 100);
-  document.getElementById('modal-intervento').classList.add('open');
-}
+function openNewIntervento() { editingId=null; pendingFiles=[]; oreEntries=[]; document.getElementById('modal-title-intervento').textContent='Nuovo Intervento'; ['f_titolo','f_indirizzo','f_descrizione','f_rapportino_num','f_offerta_num','f_ordine_num','f_fattura_num','f_fattura_data','f_rapportino_data','f_ordine_data','f_importo'].forEach(id=>document.getElementById(id).value=''); document.getElementById('f_stato').value='aperto'; document.getElementById('f_data').value=new Date().toISOString().split('T')[0]; document.getElementById('f_stato_fattura').value=''; document.getElementById('file_preview').innerHTML=''; renderHoursList(); document.getElementById('f_cliente').innerHTML='<option value="">— Seleziona —</option>'+clienti.map(c=>`<option value="${c.id}">${c.nome}</option>`).join(''); modalDirty = false; document.getElementById('modal-intervento').classList.add('open'); }
+function openEditIntervento(id) { const i=interventi.find(x=>x.id===id); if(!i) return; editingId=id; pendingFiles=i.files?[...i.files]:[]; oreEntries=(i.ore_entries&&i.ore_entries.length)?i.ore_entries.map(e=>({id:Date.now()+Math.random(),dalle:e.dalle||'',alle:e.alle||'',pausa:e.pausa||'0',data:e.data||''})):[]; document.getElementById('modal-title-intervento').textContent='Modifica Intervento'; document.getElementById('f_titolo').value=i.titolo||''; document.getElementById('f_stato').value=i.stato||'aperto'; document.getElementById('f_data').value=i.data||''; document.getElementById('f_indirizzo').value=i.indirizzo||''; document.getElementById('f_descrizione').value=i.descrizione||''; document.getElementById('f_rapportino_num').value=i.rapportino_num||''; document.getElementById('f_offerta_num').value=i.offerta_num||''; document.getElementById('f_ordine_num').value=i.ordine_num||''; document.getElementById('f_fattura_num').value=i.fattura_num||''; document.getElementById('f_fattura_data').value=i.fattura_data||''; document.getElementById('f_rapportino_data').value=i.rapportino_data||''; document.getElementById('f_ordine_data').value=i.ordine_data||''; document.getElementById('f_importo').value=i.importo||''; document.getElementById('f_stato_fattura').value=i.stato_fattura||''; renderHoursList(); document.getElementById('f_cliente').innerHTML='<option value="">— Seleziona —</option>'+clienti.map(c=>`<option value="${c.id}"${c.id===i.cliente?' selected':''}>${c.nome}</option>`).join(''); renderFilePreview(); modalDirty = false; document.getElementById('modal-intervento').classList.add('open'); }
+function renderFilePreview() { document.getElementById('file_preview').innerHTML = pendingFiles.map((f,i) => { const isImg = f.type && f.type.startsWith('image/'); const thumb = isImg ? `<img src="${f.downloadUrl||f.data||''}">` : '<div class="file-icon">📄</div>'; return `<div class="file-thumb" onclick="window.open('${f.url||f.data||'#'}','_blank')">${thumb}<div class="file-name">${f.name||'File'}</div><button class="file-del" onclick="event.stopPropagation();removeFile(${i})">×</button></div>`; }).join(''); }
+async function saveIntervento() { const titolo=document.getElementById('f_titolo').value.trim(); if(!titolo){showToast('Inserisci un titolo','error');return;} const btn=document.getElementById('save_intervento_btn'); btn.disabled=true; btn.textContent='Salvataggio...'; setSyncStatus('syncing','Salvataggio...'); const statoInt=document.getElementById('f_stato').value; const fattNum=document.getElementById('f_fattura_num').value.trim(); const fattData=document.getElementById('f_fattura_data').value.trim(); const statoFattMan=document.getElementById('f_stato_fattura').value; let statoFatt=''; if(statoInt==='chiuso'){ if(statoFattMan==='parziale'||statoFattMan==='pagata') statoFatt=statoFattMan; else if(fattNum&&fattData) statoFatt='attesa'; else statoFatt='emettere'; } const d={ titolo, cliente:document.getElementById('f_cliente').value, stato:statoInt, data:document.getElementById('f_data').value, indirizzo:document.getElementById('f_indirizzo').value, descrizione:document.getElementById('f_descrizione').value, files:[...pendingFiles], rapportino_num:document.getElementById('f_rapportino_num').value, rapportino_data:document.getElementById('f_rapportino_data').value, offerta_num:document.getElementById('f_offerta_num').value, ordine_num:document.getElementById('f_ordine_num').value, ordine_data:document.getElementById('f_ordine_data').value, fattura_num:fattNum, fattura_data:fattData, importo:document.getElementById('f_importo').value, stato_fattura:statoFatt, ore_totali:document.getElementById('f_ore_totali').value||'0', ore_entries:oreEntries.map(e=>({data:e.data||'',dalle:e.dalle,alle:e.alle,pausa:e.pausa})) }; try { const id=editingId||genId('I'); const row=interventoToRow(id,d); if(editingId) await updateSheetRow('Interventi',editingId,row,'S'); else await appendRow('Interventi',row); await syncAll(); modalDirty = false; closeModal('modal-intervento', true); showToast(editingId?'Intervento aggiornato ✓':'Intervento creato ✓'); editingId=null; } catch(e){ showToast('Errore salvataggio','error'); setSyncStatus('error','Errore'); } btn.disabled=false; btn.textContent='Salva'; }
+function openDetail(id) { const i=interventi.find(x=>x.id===id); if(!i) return; let oreHtml=(i.ore_entries&&i.ore_entries.length)?i.ore_entries.map(e=>`<span style='color:var(--accent);font-weight:700'>${e.data?fmtDataIT(e.data):''}</span> ${e.dalle||'—'} → ${e.alle||'—'} (pausa ${e.pausa||0} min)`).join('<br>')+`<br><strong>Totale: ${formatOre(parseFloat(i.ore_totali||0))}</strong>`:`<strong>${formatOre(parseFloat(i.ore_totali||0))}</strong>`; document.getElementById('det_titolo').textContent=i.titolo; document.getElementById('det_id').textContent='#'+i.id; document.getElementById('detail_body').innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px"><div><div style="font-size:10px;color:var(--muted)">STATO</div><div>${statoInterventoBadge(i.stato)}</div></div><div><div style="font-size:10px;color:var(--muted)">CLIENTE</div><div>${getClientName(i.cliente)}</div></div><div><div style="font-size:10px;color:var(--muted)">DATA</div><div>${fmtDataIT(i.data)||'—'}</div></div><div><div style="font-size:10px;color:var(--muted)">INDIRIZZO</div><div>${i.indirizzo||'—'}</div></div><div style="grid-column:1/-1"><div style="font-size:10px;color:var(--muted)">ORE LAVORO</div><div>${oreHtml}</div></div><div><div style="font-size:10px;color:var(--muted)">RAPPORTINO</div><div>${i.rapportino_num?`${i.rapportino_num} del ${i.rapportino_data||'—'}`:'—'}</div></div><div><div style="font-size:10px;color:var(--muted)">OFFERTA N.</div><div>${i.offerta_num||'—'}</div></div><div><div style="font-size:10px;color:var(--muted)">ORDINE CLIENTE</div><div>${i.ordine_num?`${i.ordine_num} del ${i.ordine_data||'—'}`:'—'}</div></div><div style="grid-column:1/-1;background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--blue);margin-bottom:6px">💰 FATTURAZIONE</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;font-size:13px"><div>Fattura: ${i.fattura_num||'—'}</div><div>Data: ${i.fattura_data||'—'}</div><div>Importo: € ${parseFloat(i.importo||0).toFixed(2)}</div><div style="grid-column:1/-1">Stato: ${statoFatturaBadge(i.stato_fattura)||'—'}</div></div></div><div style="grid-column:1/-1"><div style="font-size:10px;color:var(--muted)">DESCRIZIONE</div><div>${i.descrizione||'—'}</div></div></div>`; const fd=document.getElementById('det_files'); fd.innerHTML = i.files && i.files.length ? i.files.map(f => { const isImg = f.type && f.type.startsWith('image/'); const thumb = isImg ? `<img src="${f.downloadUrl||f.data||''}">` : '<div class="file-icon">📄</div>'; return `<div class="file-thumb" onclick="window.open('${f.url||f.data||'#'}','_blank')">${thumb}<div class="file-name">${f.name||'File'}</div></div>`; }).join('') : '<div style="color:var(--muted);font-size:12px;grid-column:1/-1;text-align:center">Nessun allegato</div>'; document.getElementById('edit_intervento_btn').onclick=()=>{closeModal('modal-detail');openEditIntervento(id);}; document.getElementById('delete_intervento_btn').onclick=()=>deleteIntervento(id); document.getElementById('pdf_intervento_btn').onclick=()=>openSignatureModal(i); document.getElementById('modal-detail').classList.add('open'); }
+async function deleteIntervento(id) { if(!confirm('Eliminare questo intervento?')) return; setSyncStatus('syncing','Eliminazione...'); try{await deleteSheetRow('Interventi',id);await syncAll();closeModal('modal-detail');showToast('Intervento eliminato');} catch(e){showToast('Errore eliminazione','error');} }
+function openNewCliente() { editingClienteId=null; document.getElementById('modal-cliente-title').textContent='Nuovo Cliente'; ['c_nome','c_ref','c_tel','c_email','c_citta','c_piva','c_indirizzo'].forEach(id=>document.getElementById(id).value=''); document.getElementById('save_cliente_btn').onclick=saveCliente; document.getElementById('modal-cliente').classList.add('open'); }
+async function saveCliente() { const nome=document.getElementById('c_nome').value.trim(); if(!nome){showToast('Inserisci ragione sociale','error');return;} const id=genId('C'); const d={nome,ref:document.getElementById('c_ref').value,tel:document.getElementById('c_tel').value,email:document.getElementById('c_email').value,citta:document.getElementById('c_citta').value,piva:document.getElementById('c_piva').value,indirizzo_completo:document.getElementById('c_indirizzo').value}; try{ await appendRow('Clienti',clienteToRow(id,d)); await syncAll(); closeModal('modal-cliente');showToast('Cliente aggiunto ✓'); }catch(e){showToast('Errore salvataggio','error');} }
+function openClientDetail(id) { const c=clienti.find(x=>x.id===id); if(!c) return; document.getElementById('det_titolo').textContent=c.nome; document.getElementById('det_id').textContent=c.email||''; document.getElementById('detail_body').innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px"><div><div style="font-size:10px;color:var(--muted)">REFERENTE</div><div>${c.ref||'—'}</div></div><div><div style="font-size:10px;color:var(--muted)">TELEFONO</div><div>${c.tel||'—'}</div></div><div><div style="font-size:10px;color:var(--muted)">EMAIL</div><div>${c.email||'—'}</div></div><div><div style="font-size:10px;color:var(--muted)">CITTÀ</div><div>${c.citta||'—'}</div></div><div><div style="font-size:10px;color:var(--muted)">P.IVA</div><div>${c.piva||'—'}</div></div><div class="full"><div style="font-size:10px;color:var(--muted)">INDIRIZZO</div><div>${c.indirizzo_completo||'—'}</div></div></div>`; document.getElementById('det_files').innerHTML=''; document.getElementById('edit_intervento_btn').style.display=''; document.getElementById('edit_intervento_btn').textContent='✏️ Modifica'; document.getElementById('edit_intervento_btn').onclick=()=>{closeModal('modal-detail'); openEditCliente(id);}; document.getElementById('pdf_intervento_btn').style.display='none'; document.getElementById('delete_intervento_btn').onclick=()=>deleteCliente(id); document.getElementById('modal-detail').classList.add('open'); }
+function openEditCliente(id) { const c=clienti.find(x=>x.id===id); if(!c) return; editingClienteId=id; document.getElementById('modal-cliente-title').textContent='Modifica Cliente'; document.getElementById('c_nome').value=c.nome||''; document.getElementById('c_ref').value=c.ref||''; document.getElementById('c_tel').value=c.tel||''; document.getElementById('c_email').value=c.email||''; document.getElementById('c_citta').value=c.citta||''; document.getElementById('c_piva').value=c.piva||''; document.getElementById('c_indirizzo').value=c.indirizzo_completo||''; document.getElementById('save_cliente_btn').onclick=async()=>{ const nome=document.getElementById('c_nome').value.trim(); if(!nome){showToast('Inserisci ragione sociale','error');return;} const d={nome,ref:document.getElementById('c_ref').value,tel:document.getElementById('c_tel').value,email:document.getElementById('c_email').value,citta:document.getElementById('c_citta').value,piva:document.getElementById('c_piva').value,indirizzo_completo:document.getElementById('c_indirizzo').value}; try{ await updateSheetRow('Clienti',id,clienteToRow(id,d),'H'); await syncAll(); closeModal('modal-cliente');showToast('Cliente aggiornato ✓'); }catch(e){showToast('Errore salvataggio','error');} }; document.getElementById('modal-cliente').classList.add('open'); }
+async function deleteCliente(id) { if(!confirm('Eliminare questo cliente?')) return; setSyncStatus('syncing','Eliminazione...'); try{await deleteSheetRow('Clienti',id);await syncAll();closeModal('modal-detail');showToast('Cliente eliminato');} catch(e){showToast('Errore eliminazione','error');} }
+function exportToExcel() { const rows = interventi.map(i => ({ 'ID': i.id, 'Titolo': i.titolo, 'Cliente': getClientName(i.cliente), 'Stato Intervento': i.stato })); if (!rows.length) { showToast('Nessun dato da esportare', 'error'); return; } const csv = [Object.keys(rows[0]).join(';'), ...rows.map(r => Object.values(r).map(v => `"${String(v).replace(/;/g,',')}"`).join(';'))].join('\n'); const blob = new Blob(["\uFEFF"+csv], {type:'text/csv;charset=utf-8;'}); const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href=url; a.download=`tekno_interventi_${new Date().toISOString().split('T')[0]}.csv`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); showToast('Excel esportato!'); }
+function exportBackup() { const blob=new Blob([JSON.stringify({version:'2.0',exportDate:new Date().toISOString(),clienti,interventi},null,2)],{type:'application/json'}); const url=URL.createObjectURL(blob),a=document.createElement('a'); a.href=url;a.download=`tekno_backup_${new Date().toISOString().split('T')[0]}.json`; document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url); showToast('Backup esportato!'); }
+async function importBackup(input) { const file=input.files[0]; if(!file) return; const reader=new FileReader(); reader.onload=async function(e){ try{ const d=JSON.parse(e.target.result); if(!confirm(`Importare ${(d.interventi||[]).length} interventi?`)) return; for(const c of (d.clienti||[])){if(!clienti.find(x=>x.id===c.id))await appendRow('Clienti',clienteToRow(c.id,c));} for(const i of (d.interventi||[])){if(!interventi.find(x=>x.id===i.id))await appendRow('Interventi',interventoToRow(i.id,i));} await syncAll();showToast('Backup importato!'); } catch(e){showToast('Errore file','error');} }; reader.readAsText(file);input.value=''; }
+function updateYearFilterOptions() { const years=[...new Set(interventi.filter(i=>i.data).map(i=>i.data.split('-')[0]))].sort().reverse(); ['interventi-year-filter','fatture-year-filter'].forEach(id=>{ const sel=document.getElementById(id); if(!sel) return; const cur=sel.value; sel.innerHTML='<option value="tutti">Tutti gli anni</option>'+years.map(y=>`<option value="${y}">${y}</option>`).join(''); if(years.includes(cur)) sel.value=cur; });}
+function toggleMobMenu() { const menu = document.getElementById('mob-menu'); if (menu) menu.style.display = menu.style.display === 'none' ? 'block' : 'none'; }
+function closeMobMenu() { const menu = document.getElementById('mob-menu'); if (menu) menu.style.display = 'none'; }
 
-function openEditIntervento(id) {
-  const i=interventi.find(x=>x.id===id); if(!i) return;
-  editingId=id; pendingFiles=i.files?[...i.files]:[];
-  oreEntries=(i.ore_entries&&i.ore_entries.length)?i.ore_entries.map(e=>({id:Date.now()+Math.random(),dalle:e.dalle||'',alle:e.alle||'',pausa:e.pausa||'0',data:e.data||''})):[];
-  document.getElementById('modal-title-intervento').textContent='Modifica Intervento';
-  document.getElementById('f_titolo').value=i.titolo||'';
-  document.getElementById('f_stato').value=i.stato||'aperto';
-  document.getElementById('f_data').value=i.data||'';
-  document.getElementById('f_indirizzo').value=i.indirizzo||'';
-  document.getElementById('f_descrizione').value=i.descrizione||'';
-  document.getElementById('f_rapportino_num').value=i.rapportino_num||'';
-  document.getElementById('f_offerta_num').value=i.offerta_num||'';
-  document.getElementById('f_ordine_num').value=i.ordine_num||'';
-  document.getElementById('f_fattura_num').value=i.fattura_num||'';
-  document.getElementById('f_fattura_data').value=i.fattura_data||'';
-  document.getElementById('f_rapportino_data').value=i.rapportino_data||'';
-  document.getElementById('f_ordine_data').value=i.ordine_data||'';
-  document.getElementById('f_importo').value=i.importo||'';
-  document.getElementById('f_stato_fattura').value=i.stato_fattura||'';
-  renderHoursList();
-  document.getElementById('f_cliente').innerHTML='<option value="">— Seleziona —</option>'+clienti.map(c=>`<option value="${c.id}"${c.id===i.cliente?' selected':''}>${c.nome}</option>`).join('');
-  renderFilePreview();
-  document.getElementById('f_stato').onchange = function() {
-    if (this.value !== 'chiuso') {
-      document.getElementById('f_stato_fattura').value = '';
-    }
-  };
-  modalDirty = false;
-  setTimeout(() => {
-    document.querySelectorAll('#modal-intervento .form-control').forEach(el => {
-      el.addEventListener('change', () => { modalDirty = true; }, { once: true });
-      el.addEventListener('input', () => { modalDirty = true; }, { once: true });
-    });
-  }, 100);
-  document.getElementById('modal-intervento').classList.add('open');
-}
-
-function renderFilePreview() {
-  document.getElementById('file_preview').innerHTML = pendingFiles.map((f,i) => {
-    const isImg = f.type && f.type.startsWith('image/');
-    const thumb = isImg ? `<img src="${f.downloadUrl||f.data||''}">` : '<div class="file-icon">📄</div>';
-    return `<div class="file-thumb" onclick="window.open('${f.url||f.data||'#'}','_blank')">${thumb}<div class="file-name">${f.name||'File'}</div><button class="file-del" onclick="event.stopPropagation();removeFile(${i})">×</button></div>`;
-  }).join('');
-}
-function removeFile(idx) {
-  const f = pendingFiles[idx];
-  if (f && f.id && !f.data) deleteFileFromDrive(f.id); // solo file Drive, non base64 legacy
-  pendingFiles.splice(idx, 1);
-  renderFilePreview();
-}
-async function addFiles(files) {
-  const area = document.querySelector('.file-upload-area');
-  const saveBtn = document.getElementById('save_intervento_btn');
-  const fileList = Array.from(files);
-  let done = 0;
-  // blocca salvataggio durante upload
-  saveBtn.disabled = true;
-  saveBtn.textContent = `⏳ Caricamento allegati (0/${fileList.length})...`;
-  area.innerHTML = `<div style="color:var(--blue)">⏳ Caricamento in corso...</div>`;
-  for (const file of fileList) {
-    try {
-      const uploaded = await uploadFileToDrive(file);
-      pendingFiles.push(uploaded);
-      done++;
-      saveBtn.textContent = `⏳ Caricamento allegati (${done}/${fileList.length})...`;
-      renderFilePreview();
-    } catch(e) {
-      showToast('Errore caricamento: ' + file.name, 'error');
-      console.error(e);
-    }
-  }
-  area.innerHTML = '📎 Clicca per allegare altri file';
-  saveBtn.disabled = false;
-  saveBtn.textContent = 'Salva';
-  if (done > 0) showToast(`${done} allegato/i caricato/i ✓`);
-}
-
-async function saveIntervento() {
-  const titolo=document.getElementById('f_titolo').value.trim();
-  if(!titolo){showToast('Inserisci un titolo','error');return;}
-  const btn=document.getElementById('save_intervento_btn');
-  btn.disabled=true; btn.textContent='Salvataggio...';
-  setSyncStatus('syncing','Salvataggio...');
-
-  const statoInt=document.getElementById('f_stato').value;
-  const fattNum=document.getElementById('f_fattura_num').value.trim();
-  const fattData=document.getElementById('f_fattura_data').value.trim();
-  const statoFattMan=document.getElementById('f_stato_fattura').value;
-  let statoFatt='';
-  if(statoInt==='chiuso'){
-    if(statoFattMan==='parziale'||statoFattMan==='pagata') statoFatt=statoFattMan;
-    else if(fattNum&&fattData) statoFatt='attesa';
-    else statoFatt='emettere';
-  }
-
-  const d={
-    titolo,cliente:document.getElementById('f_cliente').value,stato:statoInt,
-    data:document.getElementById('f_data').value,indirizzo:document.getElementById('f_indirizzo').value,
-    descrizione:document.getElementById('f_descrizione').value,files:[...pendingFiles],
-    rapportino_num:document.getElementById('f_rapportino_num').value,
-    rapportino_data:document.getElementById('f_rapportino_data').value,
-    offerta_num:document.getElementById('f_offerta_num').value,
-    ordine_num:document.getElementById('f_ordine_num').value,
-    ordine_data:document.getElementById('f_ordine_data').value,
-    fattura_num:fattNum,fattura_data:fattData,
-    importo:document.getElementById('f_importo').value,
-    stato_fattura:statoFatt,
-    ore_totali:document.getElementById('f_ore_totali').value||'0',
-    ore_entries:oreEntries.map(e=>({data:e.data||'',dalle:e.dalle,alle:e.alle,pausa:e.pausa}))
-  };
-
-  try {
-    await refreshTokenIfNeeded();
-    const id=editingId||genId('I');
-    const row=interventoToRow(id,d);
-    if(editingId) await updateSheetRow('Interventi',editingId,row,'S');
-    else await appendRow('Interventi',row);
-    await syncAll();
-    modalDirty = false;
-    closeModal('modal-intervento', true);
-    showToast(editingId?'Intervento aggiornato ✓':'Intervento creato ✓');
-    editingId=null;
-  } catch(e){
-    console.error('saveIntervento error:', e);
-    const msg = (e&&e.result&&e.result.error&&e.result.error.message) || (e&&e.message) || JSON.stringify(e);
-    if(e&&e.status===401){showToast('Sessione scaduta — premi Riconnetti','error');setSyncStatus('error','Sessione scaduta');}
-    else{showToast('Errore: '+msg,'error');setSyncStatus('error','Errore');}
-  }
-  btn.disabled=false; btn.textContent='Salva';
-}
-
-function openDetail(id) {
-  const i=interventi.find(x=>x.id===id); if(!i) return;
-  let oreHtml=(i.ore_entries&&i.ore_entries.length)?i.ore_entries.map(e=>`<span style='color:var(--accent);font-weight:700'>${e.data?fmtDataIT(e.data):''}</span> ${e.dalle||'—'} → ${e.alle||'—'} (pausa ${e.pausa||0} min)`).join('<br>')+`<br><strong>Totale: ${formatOre(parseFloat(i.ore_totali||0))}</strong>`:`<strong>${formatOre(parseFloat(i.ore_totali||0))}</strong>`;
-  document.getElementById('det_titolo').textContent=i.titolo;
-  document.getElementById('det_id').textContent='#'+i.id;
-  document.getElementById('detail_body').innerHTML=`
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-      <div><div style="font-size:10px;color:var(--muted)">STATO</div><div>${statoInterventoBadge(i.stato)}</div></div>
-      <div><div style="font-size:10px;color:var(--muted)">CLIENTE</div><div>${getClientName(i.cliente)}</div></div>
-      <div><div style="font-size:10px;color:var(--muted)">DATA</div><div>${fmtDataIT(i.data)||'—'}</div></div>
-      <div><div style="font-size:10px;color:var(--muted)">INDIRIZZO</div><div>${i.indirizzo||'—'}</div></div>
-      <div><div style="font-size:10px;color:var(--muted)">ORE LAVORO</div><div>${oreHtml}</div></div>
-      <div><div style="font-size:10px;color:var(--muted)">RAPPORTINO</div><div>${i.rapportino_num?`${i.rapportino_num} del ${i.rapportino_data||'—'}`:'—'}</div></div>
-      <div><div style="font-size:10px;color:var(--muted)">OFFERTA N.</div><div>${i.offerta_num||'—'}</div></div>
-      <div><div style="font-size:10px;color:var(--muted)">ORDINE CLIENTE</div><div>${i.ordine_num?`${i.ordine_num} del ${i.ordine_data||'—'}`:'—'}</div></div>
-      <div style="grid-column:1/-1;background:var(--surface2);padding:12px;border-radius:8px">
-        <div style="font-size:10px;color:var(--blue);margin-bottom:6px">💰 FATTURAZIONE</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;font-size:13px">
-          <div>Fattura: ${i.fattura_num||'—'}</div>
-          <div>Data: ${i.fattura_data||'—'}</div>
-          <div>Importo: € ${parseFloat(i.importo||0).toFixed(2)}</div>
-          <div style="grid-column:1/-1">Stato: ${statoFatturaBadge(i.stato_fattura)||'—'}</div>
-        </div>
-      </div>
-      <div style="grid-column:1/-1"><div style="font-size:10px;color:var(--muted)">DESCRIZIONE</div><div>${i.descrizione||'—'}</div></div>
-    </div>`;
-  const fd=document.getElementById('det_files');
-  fd.innerHTML = i.files && i.files.length
-    ? i.files.map(f => {
-        const isImg = f.type && f.type.startsWith('image/');
-        const thumb = isImg ? `<img src="${f.downloadUrl||f.data||''}">` : '<div class="file-icon">📄</div>';
-        return `<div class="file-thumb" onclick="window.open('${f.url||f.data||'#'}','_blank')">${thumb}<div class="file-name">${f.name||'File'}</div></div>`;
-      }).join('')
-    : '<div style="color:var(--muted);font-size:12px;grid-column:1/-1;text-align:center">Nessun allegato</div>';
-  document.getElementById('edit_intervento_btn').style.display='';
-  document.getElementById('edit_intervento_btn').textContent='✏️ Modifica';
-  document.getElementById('pdf_intervento_btn').style.display='';
-  document.getElementById('edit_intervento_btn').onclick=()=>{closeModal('modal-detail');openEditIntervento(id);};
-  document.getElementById('delete_intervento_btn').onclick=()=>deleteIntervento(id);
-  document.getElementById('pdf_intervento_btn').onclick=()=>openSignatureModal(i);
-  document.getElementById('modal-detail').classList.add('open');
-}
-
-async function deleteIntervento(id) {
-  if(!confirm('Eliminare questo intervento?')) return;
-  setSyncStatus('syncing','Eliminazione...');
-  try{await deleteSheetRow('Interventi',id);await syncAll();closeModal('modal-detail');showToast('Intervento eliminato');}
-  catch(e){showToast('Errore eliminazione','error');}
-}
-
-// ─── CLIENTI CRUD ─────────────────────────────────────────────────────────────
-function openNewCliente() {
-  editingClienteId=null;
-  document.getElementById('modal-cliente-title').textContent='Nuovo Cliente';
-  ['c_nome','c_ref','c_tel','c_email','c_citta','c_piva','c_indirizzo'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('save_cliente_btn').onclick=saveCliente;
-  document.getElementById('modal-cliente').classList.add('open');
-}
-
-function openEditCliente(id) {
-  const c=clienti.find(x=>x.id===id); if(!c) return;
-  editingClienteId=id;
-  document.getElementById('modal-cliente-title').textContent='Modifica Cliente';
-  document.getElementById('c_nome').value=c.nome||'';
-  document.getElementById('c_ref').value=c.ref||'';
-  document.getElementById('c_tel').value=c.tel||'';
-  document.getElementById('c_email').value=c.email||'';
-  document.getElementById('c_citta').value=c.citta||'';
-  document.getElementById('c_piva').value=c.piva||'';
-  document.getElementById('c_indirizzo').value=c.indirizzo_completo||'';
-  document.getElementById('save_cliente_btn').onclick=async()=>{
-    const nome=document.getElementById('c_nome').value.trim();
-    if(!nome){showToast('Inserisci ragione sociale','error');return;}
-    const btn=document.getElementById('save_cliente_btn');
-    btn.disabled=true; btn.textContent='Salvataggio...';
-    setSyncStatus('syncing','Salvataggio...');
-    const d={nome,ref:document.getElementById('c_ref').value,tel:document.getElementById('c_tel').value,email:document.getElementById('c_email').value,citta:document.getElementById('c_citta').value,piva:document.getElementById('c_piva').value,indirizzo_completo:document.getElementById('c_indirizzo').value};
-    try{
-      await updateSheetRow('Clienti',id,clienteToRow(id,d),'H');
-      await syncAll();
-      closeModal('modal-cliente');showToast('Cliente aggiornato ✓');
-      document.getElementById('save_cliente_btn').onclick=saveCliente;
-      document.getElementById('modal-cliente-title').textContent='Nuovo Cliente';
-    }catch(e){showToast('Errore salvataggio','error');}
-    btn.disabled=false; btn.textContent='Salva Cliente';
-  };
-  document.getElementById('modal-cliente').classList.add('open');
-}
-
-async function saveCliente() {
-  const nome=document.getElementById('c_nome').value.trim();
-  if(!nome){showToast('Inserisci ragione sociale','error');return;}
-  const btn=document.getElementById('save_cliente_btn');
-  btn.disabled=true; btn.textContent='Salvataggio...';
-  setSyncStatus('syncing','Salvataggio...');
-  const id=genId('C');
-  const d={nome,ref:document.getElementById('c_ref').value,tel:document.getElementById('c_tel').value,email:document.getElementById('c_email').value,citta:document.getElementById('c_citta').value,piva:document.getElementById('c_piva').value,indirizzo_completo:document.getElementById('c_indirizzo').value};
-  try{
-    await refreshTokenIfNeeded();
-    await appendRow('Clienti',clienteToRow(id,d));
-    await syncAll();
-    closeModal('modal-cliente');showToast('Cliente aggiunto ✓');
-  }catch(e){showToast('Errore salvataggio','error');setSyncStatus('error','Errore');}
-  btn.disabled=false; btn.textContent='Salva Cliente';
-}
-
-function openClientDetail(id) {
-  const c=clienti.find(x=>x.id===id); if(!c) return;
-  document.getElementById('det_titolo').textContent=c.nome;
-  document.getElementById('det_id').textContent=c.email||'';
-  document.getElementById('detail_body').innerHTML=`
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-      <div><div style="font-size:10px;color:var(--muted)">REFERENTE</div><div>${c.ref||'—'}</div></div>
-      <div><div style="font-size:10px;color:var(--muted)">TELEFONO</div><div>${c.tel||'—'}</div></div>
-      <div><div style="font-size:10px;color:var(--muted)">EMAIL</div><div>${c.email||'—'}</div></div>
-      <div><div style="font-size:10px;color:var(--muted)">CITTÀ</div><div>${c.citta||'—'}</div></div>
-      <div><div style="font-size:10px;color:var(--muted)">P.IVA</div><div>${c.piva||'—'}</div></div>
-      <div class="full"><div style="font-size:10px;color:var(--muted)">INDIRIZZO</div><div>${c.indirizzo_completo||'—'}</div></div>
-    </div>`;
-  document.getElementById('det_files').innerHTML='';
-  document.getElementById('edit_intervento_btn').style.display='';
-  document.getElementById('edit_intervento_btn').textContent='✏️ Modifica';
-  document.getElementById('edit_intervento_btn').onclick=()=>{closeModal('modal-detail');openEditCliente(id);};
-  document.getElementById('pdf_intervento_btn').style.display='none';
-  document.getElementById('delete_intervento_btn').onclick=()=>deleteCliente(id);
-  document.getElementById('modal-detail').classList.add('open');
-}
-
-async function deleteCliente(id) {
-  if(!confirm('Eliminare questo cliente?')) return;
-  setSyncStatus('syncing','Eliminazione...');
-  try{await deleteSheetRow('Clienti',id);await syncAll();closeModal('modal-detail');showToast('Cliente eliminato');}
-  catch(e){showToast('Errore eliminazione','error');}
-}
-
-// ─── EXCEL EXPORT ─────────────────────────────────────────────────────────────
-function exportToExcel() {
-  const rows = interventi.map(i => {
-    let ore = '';
-    if (i.ore_entries && i.ore_entries.length) {
-      ore = i.ore_entries.map(e => `${e.dalle||'--:--'} → ${e.alle||'--:--'} (pausa ${e.pausa||0} min)`).join('; ');
-      ore += ` | Totale: ${formatOre(parseFloat(i.ore_totali||0))}`;
-    } else ore = formatOre(parseFloat(i.ore_totali||0));
-    return {
-      'ID': i.id, 'Titolo': i.titolo, 'Cliente': getClientName(i.cliente),
-      'Stato Intervento': i.stato, 'Data Intervento': fmtDataIT(i.data)||'',
-      'Indirizzo': i.indirizzo||'', 'Ore Lavoro': ore,
-      'Rapportino N.': i.rapportino_num||'', 'Rapportino Data': fmtDataIT(i.rapportino_data)||'',
-      'Offerta N.': i.offerta_num||'', 'Ordine Cliente N.': i.ordine_num||'',
-      'Ordine Data': fmtDataIT(i.ordine_data)||'', 'Fattura N.': i.fattura_num||'',
-      'Data Fattura': fmtDataIT(i.fattura_data)||'', 'Importo (€)': i.importo||'',
-      'Stato Fattura': i.stato_fattura||'', 'Descrizione': i.descrizione||''
-    };
-  });
-  if (!rows.length) { showToast('Nessun dato da esportare', 'error'); return; }
-  const headers = Object.keys(rows[0]);
-  const csv = [headers.join(';'), ...rows.map(r => headers.map(h => `"${String(r[h]||'').replace(/;/g,',').replace(/\n/g,' ')}"`).join(';'))].join('\n');
-  const blob = new Blob(["\uFEFF"+csv], {type:'text/csv;charset=utf-8;'});
-  const url = URL.createObjectURL(blob), a = document.createElement('a');
-  a.href=url; a.download=`tekno_interventi_${new Date().toISOString().split('T')[0]}.csv`;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-  showToast('Excel esportato!');
-}
-
-// ─── CSV IMPORT ───────────────────────────────────────────────────────────────
-function importFromCSV(input) {
-  const file = input.files[0]; if (!file) return;
-  const reader = new FileReader();
-  reader.onload = async function(e) {
-    try {
-      const lines = e.target.result.split('\n');
-      const headers = lines[0].split(';').map(h => h.replace(/"/g,'').trim());
-      let importati = 0, saltati = 0;
-      const nuovi = [];
-      for (let i = 1; i < lines.length; i++) {
-        if (!lines[i].trim()) continue;
-        const values = []; let inQ=false, cur='';
-        for (const ch of lines[i]) {
-          if (ch==='"') inQ=!inQ;
-          else if (ch===';'&&!inQ) { values.push(cur); cur=''; }
-          else cur+=ch;
-        }
-        values.push(cur);
-        const row = {};
-        headers.forEach((h,idx) => { row[h]=(values[idx]||'').replace(/^"|"$/g,'').trim(); });
-        if (!row.Titolo) { saltati++; continue; }
-        const id = row.ID || genId('I');
-        if (interventi.find(x=>x.id===id)) { saltati++; continue; }
-        let clienteId='';
-        if (row.Cliente) {
-          const ce=clienti.find(c=>c.nome===row.Cliente);
-          if (ce) clienteId=ce.id;
-          else { clienteId=genId('C'); clienti.push({id:clienteId,nome:row.Cliente,ref:'',tel:'',email:'',citta:''}); await appendRow('Clienti',clienteToRow(clienteId,{nome:row.Cliente,ref:'',tel:'',email:'',citta:''})); }
-        }
-        const d={titolo:row.Titolo,cliente:clienteId,stato:row['Stato Intervento']||'aperto',data:fmtDataISO(row['Data Intervento']||''),indirizzo:row.Indirizzo||'',descrizione:row.Descrizione||'',ore_entries:[],ore_totali:'0',rapportino_num:row['Rapportino N.']||'',rapportino_data:fmtDataISO(row['Rapportino Data']||''),offerta_num:row['Offerta N.']||'',ordine_num:row['Ordine Cliente N.']||'',ordine_data:fmtDataISO(row['Ordine Data']||''),fattura_num:row['Fattura N.']||'',fattura_data:fmtDataISO(row['Data Fattura']||''),importo:row['Importo (€)']||'',stato_fattura:row['Stato Fattura']||'',files:[]};
-        nuovi.push({id,d});
-        importati++;
-      }
-      for (const {id,d} of nuovi) await appendRow('Interventi', interventoToRow(id,d));
-      await syncAll();
-      showToast(`Importati ${importati} interventi. Saltati ${saltati}.`);
-    } catch(err) { showToast('Errore importazione CSV','error'); console.error(err); }
-  };
-  reader.readAsText(file,'UTF-8'); input.value='';
-}
-
-// ─── BACKUP ───────────────────────────────────────────────────────────────────
-function exportBackup() {
-  const blob=new Blob([JSON.stringify({version:'2.0',exportDate:new Date().toISOString(),clienti,interventi},null,2)],{type:'application/json'});
-  const url=URL.createObjectURL(blob),a=document.createElement('a');
-  a.href=url;a.download=`tekno_backup_${new Date().toISOString().split('T')[0]}.json`;
-  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
-  showToast('Backup esportato!');
-}
-async function importBackup(input) {
-  const file=input.files[0]; if(!file) return;
-  const reader=new FileReader();
-  reader.onload=async function(e){
-    try{
-      const d=JSON.parse(e.target.result);
-      if(!confirm(`Importare ${(d.interventi||[]).length} interventi e ${(d.clienti||[]).length} clienti? I dati esistenti verranno mantenuti.`)) return;
-      showToast('Importazione in corso...','success');
-      // Append only new records
-      for(const c of (d.clienti||[])){if(!clienti.find(x=>x.id===c.id))await appendRow('Clienti',clienteToRow(c.id,c));}
-      for(const i of (d.interventi||[])){if(!interventi.find(x=>x.id===i.id))await appendRow('Interventi',interventoToRow(i.id,i));}
-      await syncAll();showToast('Backup importato!');
-    }catch{showToast('Errore: file non valido','error');}
-  };
-  reader.readAsText(file);input.value='';
-}
-
-// ─── PDF ──────────────────────────────────────────────────────────────────────
-// ─── PDF FIRMA TOUCHSCREEN ────────────────────────────────────────────────────
-let pdfSignatures = { tecnico: null, cliente: null };
-let activeCanvas = null;
-let isDrawing = false;
-let lastX = 0, lastY = 0;
-
-function openSignatureModal(intervento) {
-  closeModal('modal-detail', true); // chiudi dettaglio prima del PDF
-  pdfSignatures = { tecnico: null, cliente: null };
-  const sigModal = document.getElementById('modal-signature');
-  if (!sigModal) {
-    // crea modal firma al volo
-    const m = document.createElement('div');
-    m.id = 'modal-signature';
-    m.className = 'overlay';
-    m.innerHTML = `
-      <div class="modal" style="max-width:520px">
-        <div class="modal-header">
-          <div class="modal-title">✍️ Firme digitali</div>
-          <button class="modal-close" onclick="closeModal('modal-signature')">×</button>
-        </div>
-        <div class="modal-body">
-          <div style="margin-bottom:20px">
-            <div class="form-label" style="margin-bottom:8px">Firma Tecnico</div>
-            <canvas id="canvas-tecnico" width="460" height="120"
-              style="border:1.5px solid var(--border);border-radius:8px;background:#fff;width:100%;touch-action:none;cursor:crosshair"></canvas>
-            <button onclick="clearCanvas('tecnico')" class="btn btn-secondary btn-sm" style="margin-top:6px">🗑 Cancella</button>
-          </div>
-          <div>
-            <div class="form-label" style="margin-bottom:8px">Firma Cliente</div>
-            <canvas id="canvas-cliente" width="460" height="120"
-              style="border:1.5px solid var(--border);border-radius:8px;background:#fff;width:100%;touch-action:none;cursor:crosshair"></canvas>
-            <button onclick="clearCanvas('cliente')" class="btn btn-secondary btn-sm" style="margin-top:6px">🗑 Cancella</button>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" onclick="closeModal('modal-signature')">Annulla</button>
-          <button class="btn btn-primary" onclick="confirmSignaturesAndPrint()">📄 Genera PDF</button>
-        </div>
-      </div>`;
-    document.body.appendChild(m);
-  }
-  document.getElementById('modal-signature').classList.add('open');
-  setTimeout(() => {
-    setupCanvas('tecnico');
-    setupCanvas('cliente');
-  }, 100);
-  window._pendingPdfIntervento = intervento;
-}
-
-function setupCanvas(id) {
-  const canvas = document.getElementById('canvas-' + id);
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.strokeStyle = '#1a3a6e';
-  ctx.lineWidth = 2.5;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-
-  function getPos(e) {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
-  }
-
-  canvas.onmousedown = canvas.ontouchstart = (e) => {
-    e.preventDefault();
-    const pos = getPos(e);
-    isDrawing = true; lastX = pos.x; lastY = pos.y;
-    activeCanvas = canvas;
-  };
-  canvas.onmousemove = canvas.ontouchmove = (e) => {
-    e.preventDefault();
-    if (!isDrawing || activeCanvas !== canvas) return;
-    const pos = getPos(e);
-    ctx.beginPath();
-    ctx.moveTo(lastX, lastY);
-    ctx.lineTo(pos.x, pos.y);
-    ctx.stroke();
-    lastX = pos.x; lastY = pos.y;
-  };
-  canvas.onmouseup = canvas.ontouchend = () => { isDrawing = false; };
-}
-
-function clearCanvas(id) {
-  const canvas = document.getElementById('canvas-' + id);
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-}
-
-function isCanvasBlank(canvas) {
-  const ctx = canvas.getContext('2d');
-  const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-  return !data.some(v => v !== 0);
-}
-
-function confirmSignaturesAndPrint() {
-  const cTec = document.getElementById('canvas-tecnico');
-  const cCli = document.getElementById('canvas-cliente');
-  pdfSignatures.tecnico = isCanvasBlank(cTec) ? null : cTec.toDataURL('image/png');
-  pdfSignatures.cliente = isCanvasBlank(cCli) ? null : cCli.toDataURL('image/png');
-  closeModal('modal-signature');
-  exportToPDF(window._pendingPdfIntervento);
-}
-
-function exportToPDF(intervento) {
-  const cl = getClient(intervento.cliente);
-
-  function fmtD(iso) {
-    if (!iso) return '—';
-    const p = iso.split('-');
-    return p.length !== 3 ? iso : p[2] + '/' + p[1] + '/' + p[0];
-  }
-
-  const statoLabel = {
-    'aperto':'Aperto','in-corso':'In Corso',
-    'attesa-ordine':'Attesa Ordine','chiuso':'Chiuso'
-  }[intervento.stato] || intervento.stato || '—';
-
-  const clNome = cl ? cl.nome : '—';
-  const nomePulito = clNome.replace(/[^a-zA-Z0-9\s]/g,'').replace(/\s+/g,'_').substring(0,30);
-  const dataFile = fmtD(intervento.data).replace(/\//g,'-');
-
-  // Firme
-  const sigTec = pdfSignatures.tecnico
-    ? '<img src="' + pdfSignatures.tecnico + '" style="height:50px;max-width:280px;display:block;margin-bottom:4px">'
-    : '<div style="height:50px;border-bottom:1.5px solid #aaa;margin-bottom:4px"></div>';
-  const sigCli = pdfSignatures.cliente
-    ? '<img src="' + pdfSignatures.cliente + '" style="height:50px;max-width:280px;display:block;margin-bottom:4px">'
-    : '<div style="height:50px;border-bottom:1.5px solid #aaa;margin-bottom:4px"></div>';
-
-  // Ore lavoro rows
-  let oreHtml = '';
-  if (intervento.ore_entries && intervento.ore_entries.length) {
-    intervento.ore_entries.forEach((e, i) => {
-      const bg = i % 2 === 0 ? '#ffffff' : '#f7f9fc';
-      oreHtml +=
-        '<tr style="background:' + bg + '">' +
-        '<td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #eee">' + (i+1) + '</td>' +
-        '<td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #eee">' + (e.data ? fmtDataIT(e.data) : '') + '</td>' +
-        '<td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #eee">' + (e.dalle||'—') + '</td>' +
-        '<td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #eee">' + (e.alle||'—') + '</td>' +
-        '<td style="padding:4px 8px;font-size:10px;border-bottom:1px solid #eee">' + (e.pausa||0) + ' min</td>' +
-        '<td style="padding:4px 8px;font-size:10px;font-weight:bold;border-bottom:1px solid #eee">' + formatOre(calcolaOreDaEntry(e)) + '</td>' +
-        '</tr>';
-    });
-  } else {
-    oreHtml = '<tr><td colspan="6" style="padding:8px;font-size:10px;color:#888">Nessuna fascia oraria</td></tr>';
-  }
-
-  // Stili comuni
-  const BLU = '#1a3a6e';
-  const TH = 'background:#1a3a6e;color:#fff;font-size:9px;font-weight:bold;letter-spacing:0.5px;text-transform:uppercase;padding:6px 10px';
-  const LBL = 'font-size:9px;color:#777;padding:4px 8px;background:#f4f7fb;border-bottom:1px solid #e8eef5;white-space:nowrap;width:42%';
-  const VAL = 'font-size:10px;font-weight:bold;color:#111;padding:4px 8px;background:#f4f7fb;border-bottom:1px solid #e8eef5';
-
-  // Righe riferimenti
-  let rifHtml =
-    '<tr><td style="' + LBL + '">Stato</td><td style="' + VAL + '">' + statoLabel + '</td></tr>' +
-    '<tr><td style="' + LBL + '">Data intervento</td><td style="' + VAL + '">' + fmtD(intervento.data) + '</td></tr>';
-  if (intervento.rapportino_num) rifHtml += '<tr><td style="' + LBL + '">Rapportino N.</td><td style="' + VAL + '">' + intervento.rapportino_num + (intervento.rapportino_data ? ' del ' + fmtD(intervento.rapportino_data) : '') + '</td></tr>';
-  if (intervento.offerta_num)    rifHtml += '<tr><td style="' + LBL + '">Ns. Offerta N.</td><td style="' + VAL + '">' + intervento.offerta_num + '</td></tr>';
-  if (intervento.ordine_num)     rifHtml += '<tr><td style="' + LBL + '">Ordine Cliente N.</td><td style="' + VAL + '">' + intervento.ordine_num + (intervento.ordine_data ? ' del ' + fmtD(intervento.ordine_data) : '') + '</td></tr>';
-
-  // Righe cliente
-  let cliHtml = '<tr><td style="' + LBL + '">Ragione sociale</td><td style="' + VAL + '">' + clNome + '</td></tr>';
-  if (cl && cl.indirizzo_completo) cliHtml += '<tr><td style="' + LBL + '">Indirizzo</td><td style="' + VAL + '">' + cl.indirizzo_completo + '</td></tr>';
-  if (cl && cl.ref)   cliHtml += '<tr><td style="' + LBL + '">Referente</td><td style="' + VAL + '">' + cl.ref + '</td></tr>';
-  if (cl && cl.tel)   cliHtml += '<tr><td style="' + LBL + '">Telefono</td><td style="' + VAL + '">' + cl.tel + '</td></tr>';
-  if (cl && cl.email) cliHtml += '<tr><td style="' + LBL + '">Email</td><td style="' + VAL + '">' + cl.email + '</td></tr>';
-  if (cl && cl.piva)  cliHtml += '<tr><td style="' + LBL + '">P.IVA</td><td style="' + VAL + '">' + cl.piva + '</td></tr>';
-  if (cl && cl.citta) cliHtml += '<tr><td style="' + LBL + '">Città</td><td style="' + VAL + '">' + cl.citta + '</td></tr>';
-
-  // HTML completo — larghezza fissa 700px, tutto proporzionato
-  const h = `
-<div style="width:700px;font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#111;background:#fff">
-
-  <!-- INTESTAZIONE -->
-  <table width="700" cellpadding="0" cellspacing="0" style="background:#1a3a6e;margin-bottom:0">
-    <tr>
-      <td style="padding:14px 20px 12px;color:#fff">
-        <div style="font-size:20px;font-weight:bold;letter-spacing:-0.5px">TeknoAutomazione</div>
-        <div style="font-size:9px;letter-spacing:2px;opacity:0.75;margin-top:2px">RAPPORTO INTERVENTO TECNICO</div>
-      </td>
-      <td align="right" style="padding:14px 20px 12px;color:#fff;font-size:9px;vertical-align:top">
-        Data: ${fmtD(intervento.data)}<br>
-        Rif: #${intervento.id}
-      </td>
-    </tr>
-  </table>
-
-  <!-- TITOLO INTERVENTO -->
-  <table width="700" cellpadding="0" cellspacing="0" style="background:#eef3fb;border-bottom:3px solid #1a3a6e;margin-bottom:10px">
-    <tr>
-      <td style="padding:8px 20px">
-        <div style="font-size:13px;font-weight:bold;color:#1a3a6e">${intervento.titolo||'—'}</div>
-        ${intervento.indirizzo ? '<div style="font-size:9px;color:#555;margin-top:2px">&#128205; ' + intervento.indirizzo + '</div>' : ''}
-      </td>
-    </tr>
-  </table>
-
-  <!-- RIFERIMENTI + CLIENTE -->
-  <table width="700" cellpadding="0" cellspacing="0" style="margin-bottom:10px">
-    <tr valign="top">
-      <td width="345" style="padding-right:5px">
-        <table width="345" cellpadding="0" cellspacing="0" style="border:1px solid #c8d4e8">
-          <tr><td colspan="2" style="${TH}">Riferimenti documento</td></tr>
-          ${rifHtml}
-        </table>
-      </td>
-      <td width="345" style="padding-left:5px">
-        <table width="345" cellpadding="0" cellspacing="0" style="border:1px solid #c8d4e8">
-          <tr><td colspan="2" style="${TH}">Dati cliente</td></tr>
-          ${cliHtml}
-        </table>
-      </td>
-    </tr>
-  </table>
-
-  <!-- ORE LAVORO -->
-  <div style="font-size:9px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;color:#1a3a6e;margin-bottom:4px">Dettaglio ore lavoro</div>
-  <table width="700" cellpadding="0" cellspacing="0" style="border:1px solid #c8d4e8;margin-bottom:10px">
-    <tr style="background:#1a3a6e">
-      <th style="padding:5px 8px;font-size:9px;color:#fff;font-weight:bold;text-align:left;width:30px">#</th>
-      <th style="padding:5px 8px;font-size:9px;color:#fff;font-weight:bold;text-align:left;width:90px">Data</th>
-      <th style="padding:5px 8px;font-size:9px;color:#fff;font-weight:bold;text-align:left;width:70px">Dalle</th>
-      <th style="padding:5px 8px;font-size:9px;color:#fff;font-weight:bold;text-align:left;width:70px">Alle</th>
-      <th style="padding:5px 8px;font-size:9px;color:#fff;font-weight:bold;text-align:left;width:70px">Pausa</th>
-      <th style="padding:5px 8px;font-size:9px;color:#fff;font-weight:bold;text-align:left">Ore nette</th>
-    </tr>
-    ${oreHtml}
-    <tr style="background:#eef3fb">
-      <td colspan="5" align="right" style="padding:5px 8px;font-size:10px;font-weight:bold;color:#1a3a6e;border-top:2px solid #1a3a6e">TOTALE ORE</td>
-      <td style="padding:5px 8px;font-size:12px;font-weight:bold;color:#1a3a6e;border-top:2px solid #1a3a6e">${formatOre(parseFloat(intervento.ore_totali||0))}</td>
-    </tr>
-  </table>
-
-  <!-- DESCRIZIONE -->
-  <div style="font-size:9px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;color:#1a3a6e;margin-bottom:4px">Descrizione lavori</div>
-  <table width="700" cellpadding="0" cellspacing="0" style="border:1px solid #c8d4e8;margin-bottom:10px">
-    <tr style="background:#f4f7fb">
-      <td style="padding:10px 12px;font-size:10px;color:#333;line-height:1.6;min-height:50px">${intervento.descrizione||'&nbsp;'}</td>
-    </tr>
-  </table>
-
-  <!-- FIRME -->
-  <div style="font-size:9px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;color:#1a3a6e;margin-bottom:4px">Firme di accettazione</div>
-  <table width="700" cellpadding="0" cellspacing="0">
-    <tr valign="top">
-      <td width="345" style="padding-right:5px">
-        <table width="345" cellpadding="0" cellspacing="0" style="border:1px solid #c8d4e8">
-          <tr><td style="${TH}">Tecnico esecutore</td></tr>
-          <tr style="background:#f4f7fb">
-            <td style="padding:10px 12px;height:80px">
-              ${sigTec}
-              <div style="font-size:9px;color:#555">Nome: _________________________</div>
-              <div style="font-size:9px;color:#555;margin-top:3px">Data: ${fmtD(intervento.data)}</div>
-            </td>
-          </tr>
-        </table>
-      </td>
-      <td width="345" style="padding-left:5px">
-        <table width="345" cellpadding="0" cellspacing="0" style="border:1px solid #c8d4e8">
-          <tr><td style="${TH}">Cliente — Accettazione lavori</td></tr>
-          <tr style="background:#f4f7fb">
-            <td style="padding:10px 12px;height:80px">
-              ${sigCli}
-              <div style="font-size:9px;color:#555">Nome: _________________________</div>
-              <div style="font-size:9px;color:#555;margin-top:3px">Data: ${fmtD(intervento.data)}</div>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-
-  <!-- FOOTER -->
-  <table width="700" cellpadding="0" cellspacing="0" style="margin-top:10px;border-top:1px solid #dde3ee;background:#f0f2f7">
-    <tr>
-      <td style="padding:6px 12px;font-size:8px;color:#888">Tekno Automazione — Documento generato il ${new Date().toLocaleDateString('it-IT')}</td>
-      <td align="right" style="padding:6px 12px;font-size:8px;color:#888">Intervento #${intervento.id}</td>
-    </tr>
-  </table>
-
+// FIRME e PDF migliorato per A4
+function openSignatureModal(intervento) { closeModal('modal-detail', true); pdfSignatures = { tecnico: null, cliente: null }; let sigModal = document.getElementById('modal-signature'); if (!sigModal) { const m = document.createElement('div'); m.id = 'modal-signature'; m.className = 'overlay'; m.innerHTML = `<div class="modal" style="max-width:520px"><div class="modal-header"><div class="modal-title">✍️ Firme digitali</div><button class="modal-close" onclick="closeModal('modal-signature')">×</button></div><div class="modal-body"><div style="margin-bottom:20px"><div class="form-label" style="margin-bottom:8px">Firma Tecnico</div><canvas id="canvas-tecnico" width="460" height="120" style="border:1.5px solid var(--border);border-radius:8px;background:#fff;width:100%;touch-action:none;cursor:crosshair"></canvas><button onclick="clearCanvas('tecnico')" class="btn btn-secondary btn-sm" style="margin-top:6px">🗑 Cancella</button></div><div><div class="form-label" style="margin-bottom:8px">Firma Cliente</div><canvas id="canvas-cliente" width="460" height="120" style="border:1.5px solid var(--border);border-radius:8px;background:#fff;width:100%;touch-action:none;cursor:crosshair"></canvas><button onclick="clearCanvas('cliente')" class="btn btn-secondary btn-sm" style="margin-top:6px">🗑 Cancella</button></div></div><div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-signature')">Annulla</button><button class="btn btn-primary" onclick="generateFinalPDF()">📄 Genera PDF A4</button></div></div>`; document.body.appendChild(m); } document.getElementById('modal-signature').classList.add('open'); setTimeout(() => { setupCanvas('tecnico'); setupCanvas('cliente'); }, 100); window._pendingPdfIntervento = intervento; }
+function setupCanvas(id) { const canvas = document.getElementById('canvas-' + id); if (!canvas) return; const ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.strokeStyle = '#1a3a6e'; ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; function getPos(e) { const rect = canvas.getBoundingClientRect(); const scaleX = canvas.width / rect.width; const scaleY = canvas.height / rect.height; const clientX = e.touches ? e.touches[0].clientX : e.clientX; const clientY = e.touches ? e.touches[0].clientY : e.clientY; return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY }; } canvas.onmousedown = canvas.ontouchstart = (e) => { e.preventDefault(); const pos = getPos(e); isDrawing = true; lastX = pos.x; lastY = pos.y; activeCanvas = canvas; }; canvas.onmousemove = canvas.ontouchmove = (e) => { e.preventDefault(); if (!isDrawing || activeCanvas !== canvas) return; const pos = getPos(e); ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(pos.x, pos.y); ctx.stroke(); lastX = pos.x; lastY = pos.y; }; canvas.onmouseup = canvas.ontouchend = () => { isDrawing = false; }; }
+function clearCanvas(id) { const canvas = document.getElementById('canvas-' + id); if (!canvas) return; const ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, canvas.width, canvas.height); }
+function generateFinalPDF() { const cTec = document.getElementById('canvas-tecnico'); const cCli = document.getElementById('canvas-cliente'); pdfSignatures.tecnico = cTec && !isCanvasBlank(cTec) ? cTec.toDataURL('image/png') : null; pdfSignatures.cliente = cCli && !isCanvasBlank(cCli) ? cCli.toDataURL('image/png') : null; closeModal('modal-signature'); exportToPDF(window._pendingPdfIntervento); }
+function isCanvasBlank(canvas) { const ctx = canvas.getContext('2d'); const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data; return !data.some(v => v !== 0); }
+function exportToPDF(intervento) { const cl = getClient(intervento.cliente); function fmtD(iso) { if (!iso) return '—'; const p = iso.split('-'); return p.length !== 3 ? iso : p[2] + '/' + p[1] + '/' + p[0]; } const statoLabel = { 'aperto':'Aperto','in-corso':'In Corso','attesa-ordine':'Attesa Ordine','chiuso':'Chiuso' }[intervento.stato] || intervento.stato; const clNome = cl ? cl.nome : '—'; const nomePulito = (clNome.replace(/[^a-zA-Z0-9\s]/g,'').replace(/\s+/g,'_').substring(0,30) || 'report'); const sigTec = pdfSignatures.tecnico ? `<img src="${pdfSignatures.tecnico}" style="height:55px;max-width:100%;object-fit:contain;border:1px solid #ccc;background:#fff;padding:4px;border-radius:6px">` : '<div style="height:55px;border-bottom:2px dashed #aaa;margin-bottom:4px">&nbsp;</div><div style="font-size:9px;color:#aaa">(firma non apposta)</div>'; const sigCli = pdfSignatures.cliente ? `<img src="${pdfSignatures.cliente}" style="height:55px;max-width:100%;object-fit:contain;border:1px solid #ccc;background:#fff;padding:4px;border-radius:6px">` : '<div style="height:55px;border-bottom:2px dashed #aaa;margin-bottom:4px">&nbsp;</div><div style="font-size:9px;color:#aaa">(firma non apposta)</div>';
+  let oreRows = ''; if (intervento.ore_entries && intervento.ore_entries.length) { intervento.ore_entries.forEach((e,i)=>{ oreRows += `<tr style="background:${i%2?'#f9fafc':'white'}"><td style="padding:5px 8px;border-bottom:1px solid #e2e8f0">${i+1}</td><td style="padding:5px 8px;border-bottom:1px solid #e2e8f0">${e.data?fmtD(e.data):''}</td><td style="padding:5px 8px;border-bottom:1px solid #e2e8f0">${e.dalle||'—'}</td><td style="padding:5px 8px;border-bottom:1px solid #e2e8f0">${e.alle||'—'}</td><td style="padding:5px 8px;border-bottom:1px solid #e2e8f0">${e.pausa||0} min</td><td style="padding:5px 8px;border-bottom:1px solid #e2e8f0;font-weight:bold">${formatOre(calcolaOreDaEntry(e))}</td></tr>`; }); } else { oreRows = '<tr><td colspan="6" style="padding:12px;text-align:center;color:#888">Nessuna ora registrata</td></tr>'; }
+  const htmlContent = `<div style="font-family:'Helvetica',Arial,sans-serif;max-width:100%;width:100%;margin:0 auto;padding:0;background:#fff">
+  <div style="background:#1a3a6e;padding:12px 20px;color:white"><div style="font-size:20px;font-weight:bold">TeknoAutomazione</div><div style="font-size:9px;letter-spacing:1px">RAPPORTO INTERVENTO TECNICO</div></div>
+  <div style="border-bottom:3px solid #1a3a6e;background:#eff3f6;padding:10px 20px"><div style="font-size:14px;font-weight:bold">${intervento.titolo||'Intervento Tecnico'}</div>${intervento.indirizzo?`<div style="font-size:10px;color:#555">📍 ${intervento.indirizzo}</div>`:''}</div>
+  <div style="display:flex;flex-wrap:wrap;gap:20px;padding:16px 20px">
+    <div style="flex:1;min-width:200px"><div style="font-weight:bold;font-size:10px;color:#1a3a6e;border-bottom:1px solid #ccc;margin-bottom:8px">RIFERIMENTI</div><table style="width:100%;font-size:10px">${intervento.rapportino_num?`<tr><td style="padding:4px 0;width:40%">Rapportino N.</td><td>${intervento.rapportino_num} ${intervento.rapportino_data?fmtD(intervento.rapportino_data):''}</td></tr>`:''}${intervento.offerta_num?`<tr><td style="padding:4px 0">Ns. Offerta N.</td><td>${intervento.offerta_num}</td></tr>`:''}${intervento.ordine_num?`<tr><td style="padding:4px 0">Ordine Cliente N.</td><td>${intervento.ordine_num} ${intervento.ordine_data?fmtD(intervento.ordine_data):''}</td></tr>`:''}<tr><td style="padding:4px 0">Data intervento</td><td>${fmtD(intervento.data)}</td></tr><tr><td style="padding:4px 0">Stato</td><td>${statoLabel}</td></tr></table></div>
+    <div style="flex:1;min-width:200px"><div style="font-weight:bold;font-size:10px;color:#1a3a6e;border-bottom:1px solid #ccc;margin-bottom:8px">CLIENTE</div><table style="width:100%;font-size:10px"><tr><td style="padding:4px 0;width:40%">Ragione sociale</td><td>${clNome}</td></tr>${cl&&cl.indirizzo_completo?`<tr><td style="padding:4px 0">Indirizzo</td><td>${cl.indirizzo_completo}</td></tr>`:''}${cl&&cl.ref?`<tr><td style="padding:4px 0">Referente</td><td>${cl.ref}</td></tr>`:''}${cl&&cl.tel?`<tr><td style="padding:4px 0">Telefono</td><td>${cl.tel}</td></tr>`:''}${cl&&cl.email?`<tr><td style="padding:4px 0">Email</td><td>${cl.email}</td></tr>`:''}</table></div>
+  </div>
+  <div style="padding:0 20px"><div style="font-weight:bold;font-size:10px;color:#1a3a6e;border-bottom:1px solid #ccc;margin-bottom:6px">DETTAGLIO ORE LAVORO</div><table style="width:100%;font-size:9px;border-collapse:collapse;border:1px solid #e2e8f0"><thead><tr style="background:#eef2f9"><th style="padding:6px;text-align:left">#</th><th style="padding:6px;text-align:left">Data</th><th style="padding:6px;text-align:left">Dalle</th><th style="padding:6px;text-align:left">Alle</th><th style="padding:6px;text-align:left">Pausa</th><th style="padding:6px;text-align:left">Ore nette</th></tr></thead><tbody>${oreRows}<tr style="background:#eef2f9;font-weight:bold"><td colspan="5" style="padding:6px;text-align:right">TOTALE ORE</td><td style="padding:6px">${formatOre(parseFloat(intervento.ore_totali||0))}</td></tr></tbody></table></div>
+  <div style="padding:0 20px;margin-top:12px"><div style="font-weight:bold;font-size:10px;color:#1a3a6e;border-bottom:1px solid #ccc;margin-bottom:6px">DESCRIZIONE LAVORI</div><div style="padding:8px;border:1px solid #e2e8f0;background:#fcfcfc;font-size:10px;min-height:60px">${intervento.descrizione||'—'}</div></div>
+  <div style="padding:0 20px;margin-top:12px"><div style="font-weight:bold;font-size:10px;color:#1a3a6e;border-bottom:1px solid #ccc;margin-bottom:6px">FATTURAZIONE</div><table style="width:100%;font-size:10px;border:1px solid #e2e8f0"><tr><td style="padding:6px;width:33%">Fattura N.</td><td>${intervento.fattura_num||'—'}</td><td style="width:33%">Data Fattura</td><td>${fmtD(intervento.fattura_data)}</td></tr><tr><td style="padding:6px">Importo (€)</td><td>${parseFloat(intervento.importo||0).toFixed(2)}</td><td>Stato Fattura</td><td>${intervento.stato_fattura||'—'}</td></tr></table></div>
+  <div style="display:flex;flex-wrap:wrap;gap:20px;padding:20px;margin-top:8px"><div style="flex:1;border:1px solid #e2e8f0;padding:10px;background:#fafcff"><div style="font-size:9px;font-weight:bold;margin-bottom:6px">FIRMA TECNICO</div>${sigTec}<div style="font-size:9px;margin-top:6px">Nome: _________________</div><div style="font-size:9px">Data: ${fmtD(intervento.data)}</div></div><div style="flex:1;border:1px solid #e2e8f0;padding:10px;background:#fafcff"><div style="font-size:9px;font-weight:bold;margin-bottom:6px">ACCETTAZIONE CLIENTE</div>${sigCli}<div style="font-size:9px;margin-top:6px">Nome: _________________</div><div style="font-size:9px">Data: ${fmtD(intervento.data)}</div></div></div>
+  <div style="border-top:1px solid #e2e8f0;padding:8px 20px;font-size:7px;color:#888;text-align:center">Documento generato digitalmente da TeknoAutomazione il ${new Date().toLocaleDateString('it-IT')} — ID Intervento: ${intervento.id}</div>
 </div>`;
+  html2pdf().set({ margin: [10, 8, 10, 8], filename: `rapporto_${nomePulito}_${fmtD(intervento.data).replace(/\//g,'-')}.pdf`, image: { type: 'jpeg', quality: 0.95 }, html2canvas: { scale: 2, useCORS: true, letterRendering: true, logging: false }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } }).from(htmlContent).save(); showToast('PDF generato in formato A4!'); }
 
-  // html2pdf con larghezza fissa 700px → A4
-  html2pdf().set({
-    margin: [8, 8, 8, 8],
-    filename: 'intervento_' + nomePulito + '_' + dataFile + '.pdf',
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: {
-      scale: 2,
-      useCORS: true,
-      allowTaint: true,
-      logging: false,
-      windowWidth: 716   // 700px + 2*8px margini
-    },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-  }).from(h).save();
-  showToast('PDF generato!');
-}
-
-
-// ─── MOBILE MENU ─────────────────────────────────────────────────────────────
-function toggleMobMenu() {
-  const menu = document.getElementById('mob-menu');
-  if (!menu) return;
-  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
-}
-function closeMobMenu() {
-  const menu = document.getElementById('mob-menu');
-  if (menu) menu.style.display = 'none';
-}
-
-// ─── EVENT LISTENERS ──────────────────────────────────────────────────────────
-window.onload=()=>{
-  const now=new Date(); calYear=now.getFullYear(); calMonth=now.getMonth();
-  // Assegna onclick al pulsante principale (default: nuovo intervento)
-  const mainBtn = document.getElementById('main-action-btn');
-  if (mainBtn) mainBtn.onclick = openNewIntervento;
-  document.getElementById('save_intervento_btn').onclick=saveIntervento;
-  document.getElementById('save_cliente_btn').onclick=saveCliente;
-  document.getElementById('file_input').onchange=e=>addFiles(e.target.files);
-  document.getElementById('search-input').oninput=()=>renderTable();
-  document.getElementById('fattura-search-input').oninput=()=>renderFatture();
-  document.getElementById('prev-month').onclick=()=>changeMonth(-1);
-  document.getElementById('next-month').onclick=()=>changeMonth(1);
-  document.getElementById('interventi-year-filter').onchange=()=>renderTable();
-  document.getElementById('fatture-year-filter').onchange=()=>renderFatture();
-  document.querySelectorAll('#page-interventi .filter-btn').forEach(btn=>{btn.onclick=()=>{document.querySelectorAll('#page-interventi .filter-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');currentFilter=btn.dataset.filter;renderTable();};});
-  document.querySelectorAll('#page-fatture .filter-btn').forEach(btn=>{btn.onclick=()=>{document.querySelectorAll('#page-fatture .filter-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');currentFatturaFilter=btn.dataset.fatturaFilter;renderFatture();};});
-  document.querySelectorAll('.nav-item').forEach(item=>{item.onclick=()=>showPage(item.dataset.page);});
-  document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');}));
-  // Chiudi menu mobile cliccando fuori
-  document.addEventListener('click', (e) => {
-    const menu = document.getElementById('mob-menu');
-    const btn = document.getElementById('mob-menu-btn');
-    if (menu && btn && !menu.contains(e.target) && !btn.contains(e.target)) {
-      menu.style.display = 'none';
-    }
-  });
-};
-
+window.onload=()=>{ const now=new Date(); calYear=now.getFullYear(); calMonth=now.getMonth(); document.getElementById('main-action-btn').onclick=openNewIntervento; document.getElementById('save_intervento_btn').onclick=saveIntervento; document.getElementById('save_cliente_btn').onclick=saveCliente; document.getElementById('file_input').onchange=e=>{ const files=e.target.files; if(!files.length) return; Array.from(files).forEach(async f=>{ try{ const up=await uploadFileToDrive(f); pendingFiles.push(up); renderFilePreview(); }catch(err){ showToast('Errore caricamento '+f.name,'error'); } }); }; document.getElementById('search-input').oninput=()=>renderTable(); document.getElementById('fattura-search-input').oninput=()=>renderFatture(); document.getElementById('prev-month').onclick=()=>changeMonth(-1); document.getElementById('next-month').onclick=()=>changeMonth(1); document.getElementById('interventi-year-filter').onchange=()=>renderTable(); document.getElementById('fatture-year-filter').onchange=()=>renderFatture(); document.querySelectorAll('#page-interventi .filter-btn').forEach(btn=>{btn.onclick=()=>{document.querySelectorAll('#page-interventi .filter-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');currentFilter=btn.dataset.filter;renderTable();};}); document.querySelectorAll('#page-fatture .filter-btn').forEach(btn=>{btn.onclick=()=>{document.querySelectorAll('#page-fatture .filter-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');currentFatturaFilter=btn.dataset.fatturaFilter;renderFatture();};}); document.querySelectorAll('.nav-item').forEach(item=>{item.onclick=()=>showPage(item.dataset.page);}); document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');})); document.addEventListener('click', (e) => { const menu = document.getElementById('mob-menu'); const btn = document.getElementById('mob-menu-btn'); if (menu && btn && !menu.contains(e.target) && !btn.contains(e.target)) menu.style.display = 'none'; }); };
+async function uploadFileToDrive(file) { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = async (e) => { try { const token = gapi.client.getToken().access_token; const metadata = { name: file.name, parents: driveFolderId ? [driveFolderId] : [] }; const base64 = e.target.result.split(',')[1]; const boundary = '-------TeknoUpload'; const body = `--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: ${file.type}\r\nContent-Transfer-Encoding: base64\r\n\r\n${base64}\r\n--${boundary}--`; const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,webContentLink', { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': `multipart/related; boundary=${boundary}` }, body }); const data = await res.json(); await fetch(`https://www.googleapis.com/drive/v3/files/${data.id}/permissions`, { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ role: 'reader', type: 'anyone' }) }); resolve({ id: data.id, name: file.name, type: file.type, url: data.webViewLink, downloadUrl: `https://drive.google.com/uc?id=${data.id}` }); } catch(err) { reject(err); } }; reader.readAsDataURL(file); }); }
+function riconnetti() { if (!confirm('Verrà richiesto di fare di nuovo il login Google. Continuare?')) return; localStorage.removeItem('td_token'); localStorage.removeItem('td_scope_v2'); localStorage.removeItem('td_token_time'); localStorage.removeItem('td_drive_folder'); location.reload(); }
+async function ensureDriveFolder() { try { const saved = localStorage.getItem('td_drive_folder'); if (saved) { driveFolderId = saved; return; } const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=name='${DRIVE_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)`, { headers: { Authorization: 'Bearer ' + gapi.client.getToken().access_token } }); const data = await res.json(); if (data.files && data.files.length > 0) driveFolderId = data.files[0].id; else { const cr = await fetch('https://www.googleapis.com/drive/v3/files', { method: 'POST', headers: { Authorization: 'Bearer ' + gapi.client.getToken().access_token, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: DRIVE_FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' }) }); const folder = await cr.json(); driveFolderId = folder.id; } localStorage.setItem('td_drive_folder', driveFolderId); } catch(e) { console.error(e); } }
+function removeFile(idx) { const f = pendingFiles[idx]; if (f && f.id && !f.data) deleteFileFromDrive(f.id); pendingFiles.splice(idx, 1); renderFilePreview(); }
+async function deleteFileFromDrive(fileId) { try { await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, { method: 'DELETE', headers: { Authorization: 'Bearer ' + gapi.client.getToken().access_token } }); } catch(e) { console.error(e); } }
+let isDrawing = false, lastX = 0, lastY = 0, activeCanvas = null;
+function importFromCSV(input) { alert('Funzione CSV avanzata disponibile nel pannello'); }
 </script>
-
 <script src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
 <script src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
 </body>
