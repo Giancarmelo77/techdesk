@@ -1352,14 +1352,14 @@ function confirmSignaturesAndPrint() {
   exportToPDF(window._pendingPdfIntervento);
 }
 
-async function exportToPDF(intervento) {
+function exportToPDF(intervento) {
 
   const cl = getClient(intervento.cliente);
 
   function fmtD(iso){
     if(!iso) return '—';
     const p = iso.split('-');
-    return p.length!==3 ? iso : `${p[2]}/${p[1]}/${p[0]}`;
+    return p.length !== 3 ? iso : `${p[2]}/${p[1]}/${p[0]}`;
   }
 
   const statoLabel = {
@@ -1367,188 +1367,130 @@ async function exportToPDF(intervento) {
     'in-corso':'In Corso',
     'attesa-ordine':'Attesa Ordine',
     'chiuso':'Chiuso'
-  }[intervento.stato] || '—';
+  }[intervento.stato] || intervento.stato || '—';
 
   const clNome = cl ? cl.nome : '—';
 
-  // ---------- ORE ----------
+  // ---------------- ORE ----------------
   let oreRows = '';
-  if(intervento.ore_entries && intervento.ore_entries.length){
+  if (intervento.ore_entries && intervento.ore_entries.length) {
     oreRows = intervento.ore_entries.map((e,idx)=>`
-      <tr>
-        <td>${idx+1}</td>
-        <td>${e.data ? fmtDataIT(e.data) : ''}</td>
-        <td>${e.dalle||'—'}</td>
-        <td>${e.alle||'—'}</td>
-        <td>${e.pausa||0}</td>
-        <td><b>${formatOre(calcolaOreDaEntry(e))}</b></td>
+      <tr style="border-bottom:1px solid #e5e7eb">
+        <td style="padding:6px">${idx+1}</td>
+        <td style="padding:6px;white-space:nowrap">${e.data ? fmtD(e.data) : ''}</td>
+        <td style="padding:6px">${e.dalle || '—'}</td>
+        <td style="padding:6px">${e.alle || '—'}</td>
+        <td style="padding:6px">${e.pausa || 0} min</td>
+        <td style="padding:6px;font-weight:600">${formatOre(calcolaOreDaEntry(e))}</td>
       </tr>
     `).join('');
   } else {
-    oreRows = `<tr><td colspan="6">Nessuna fascia oraria</td></tr>`;
+    oreRows = `<tr><td colspan="6" style="padding:10px">Nessuna fascia oraria</td></tr>`;
   }
 
-  // ---------- FIRME ----------
+  // ---------------- FIRME ----------------
   const sigTecnico = pdfSignatures.tecnico
-    ? `<img src="${pdfSignatures.tecnico}" style="height:60px">`
-    : `<div class="line"></div>`;
+    ? `<img src="${pdfSignatures.tecnico}" style="height:50px;object-fit:contain">`
+    : `<div style="height:50px;border-bottom:1px solid #000;width:150px;margin:auto"></div>`;
 
   const sigCliente = pdfSignatures.cliente
-    ? `<img src="${pdfSignatures.cliente}" style="height:60px">`
-    : `<div class="line"></div>`;
+    ? `<img src="${pdfSignatures.cliente}" style="height:50px;object-fit:contain">`
+    : `<div style="height:50px;border-bottom:1px solid #000;width:150px;margin:auto"></div>`;
 
-  // ---------- HTML ----------
+  // ---------------- HTML A4 ----------------
   const html = `
-  <style>
-    body { font-family: Arial; margin:0; }
-    .page { width:190mm; margin:auto; font-size:12px; }
+  <div style="
+    width:210mm;
+    min-height:297mm;
+    padding:10mm;
+    box-sizing:border-box;
+    font-family:Arial;
+    font-size:11px;
+    color:#000;
+  ">
 
-    .header {
-      background:#1a3a6e;
-      color:#fff;
-      padding:12px;
-      display:flex;
-      justify-content:space-between;
-    }
-
-    .title {
-      background:#eef3fb;
-      padding:8px;
-      font-weight:bold;
-    }
-
-    .box {
-      border:1px solid #ddd;
-      padding:10px;
-      margin-bottom:10px;
-    }
-
-    table {
-      width:100%;
-      border-collapse:collapse;
-      margin-bottom:10px;
-    }
-
-    th {
-      background:#1a3a6e;
-      color:#fff;
-      padding:6px;
-    }
-
-    td {
-      border-bottom:1px solid #eee;
-      padding:6px;
-    }
-
-    .grid {
-      display:flex;
-      gap:10px;
-    }
-
-    .col {
-      flex:1;
-      border:1px solid #ddd;
-      padding:10px;
-    }
-
-    .sign {
-      margin-top:30px;
-      display:flex;
-      justify-content:space-between;
-      text-align:center;
-    }
-
-    .line {
-      border-bottom:1px solid #000;
-      height:60px;
-    }
-
-    /* 🔥 IMPORTANTISSIMO */
-    table, tr, td, th { page-break-inside: avoid; }
-  </style>
-
-  <div class="page">
-
-    <div class="header">
-      <div>
-        <b>Tekno Automazione</b><br>
-        Rapporto Intervento
-      </div>
-      <div style="text-align:right">
-        Data: ${fmtD(intervento.data)}<br>
-        ID: ${intervento.id}
-      </div>
-    </div>
-
-    <div class="title">${intervento.titolo || '—'}</div>
-
-    <div class="grid">
-      <div class="col">
-        <b>Riferimenti</b><br><br>
-        Stato: ${statoLabel}<br>
-        Data: ${fmtD(intervento.data)}
-      </div>
-
-      <div class="col">
-        <b>Cliente</b><br><br>
-        ${clNome}<br>
-        ${cl?.indirizzo_completo||''}<br>
-        ${cl?.citta||''}
-      </div>
-    </div>
-
-    <table>
+    <!-- HEADER -->
+    <table width="100%" style="background:#1a3a6e;color:#fff">
       <tr>
-        <th>#</th><th>Data</th><th>Dalle</th><th>Alle</th><th>Pausa</th><th>Ore</th>
+        <td style="padding:12px">
+          <b>Tekno Automazione</b><br>
+          Rapporto Intervento
+        </td>
+        <td style="text-align:right;padding:12px">
+          Data: ${fmtD(intervento.data)}<br>
+          ID: ${intervento.id}
+        </td>
+      </tr>
+    </table>
+
+    <!-- TITOLO -->
+    <div style="padding:10px;background:#eef3fb;margin-bottom:10px">
+      <b>${intervento.titolo || '—'}</b>
+    </div>
+
+    <!-- INFO -->
+    <table width="100%" style="border-collapse:collapse;margin-bottom:10px">
+      <tr>
+        <td style="width:50%;border:1px solid #ddd;padding:8px">
+          <b>Riferimenti</b><br><br>
+          Stato: ${statoLabel}<br>
+          Data: ${fmtD(intervento.data)}
+        </td>
+        <td style="width:50%;border:1px solid #ddd;padding:8px">
+          <b>Cliente</b><br><br>
+          ${clNome}<br>
+          ${cl?.indirizzo_completo || ''}<br>
+          ${cl?.citta || ''}
+        </td>
+      </tr>
+    </table>
+
+    <!-- ORE -->
+    <table width="100%" style="border-collapse:collapse;margin-bottom:10px;table-layout:fixed">
+      <tr style="background:#1a3a6e;color:#fff">
+        <th style="width:5%">#</th>
+        <th style="width:18%">Data</th>
+        <th style="width:15%">Dalle</th>
+        <th style="width:15%">Alle</th>
+        <th style="width:17%">Pausa</th>
+        <th style="width:15%">Ore</th>
       </tr>
       ${oreRows}
     </table>
 
-    <div class="box">
+    <!-- DESCRIZIONE -->
+    <div style="border:1px solid #ddd;padding:10px;margin-bottom:20px">
       <b>Descrizione</b><br><br>
       ${intervento.descrizione || ''}
     </div>
 
-    <div class="sign">
-      <div>
-        Tecnico<br><br>
-        ${sigTecnico}
-      </div>
-
-      <div>
-        Cliente<br><br>
-        ${sigCliente}
-      </div>
-    </div>
+    <!-- FIRME -->
+    <table width="100%" style="margin-top:40px">
+      <tr>
+        <td style="text-align:center">
+          Tecnico<br><br>${sigTecnico}
+        </td>
+        <td style="text-align:center">
+          Cliente<br><br>${sigCliente}
+        </td>
+      </tr>
+    </table>
 
   </div>
   `;
 
-  // ---------- FIX CRITICO ----------
-  const container = document.createElement('div');
-  container.innerHTML = html;
-  document.body.appendChild(container);
-
-  await html2pdf()
-    .set({
-      margin: 10,
-      filename: `intervento_${intervento.id}.pdf`,
-      html2canvas: {
-        scale: 2,
-        useCORS: true
-      },
-      jsPDF: {
-        unit: 'mm',
-        format: 'a4',
-        orientation: 'portrait'
-      }
-    })
-    .from(container)
-    .save();
-
-  document.body.removeChild(container);
-
-  showToast('PDF generato!');
+  // ---------------- GENERAZIONE PDF ----------------
+  html2pdf().set({
+    margin: 0,
+    filename: `intervento_${intervento.id}.pdf`,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { 
+      scale: 2,
+      useCORS: true
+    },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+    pagebreak: { mode: ['avoid-all','css','legacy'] }
+  }).from(html).save();
 }
 
 // ─── MOBILE MENU ─────────────────────────────────────────────────────────────
