@@ -1352,161 +1352,202 @@ function confirmSignaturesAndPrint() {
   exportToPDF(window._pendingPdfIntervento);
 }
 
-function exportToPDF(intervento) {
-  const cl=getClient(intervento.cliente);
-  function fmtD(iso){if(!iso)return'—';const p=iso.split('-');return p.length!==3?iso:`${p[2]}/${p[1]}/${p[0]}`;}
-  const statoLabel={'aperto':'Aperto','in-corso':'In Corso','attesa-ordine':'Attesa Ordine','chiuso':'Chiuso'}[intervento.stato]||intervento.stato||'—';
+async function exportToPDF(intervento) {
 
-  // Pre-calcola righe Riferimenti (evita backtick annidati che rompono html2pdf)
-  const rowRapportino = intervento.rapportino_num
-    ? '<tr style="border-bottom:1px solid #e8edf5"><td style="font-size:11px;color:#888;padding:6px 14px">Rapportino N.</td><td style="font-size:11px;font-weight:600;color:#1a1a2e;padding:6px 14px">' + intervento.rapportino_num + (intervento.rapportino_data ? ' del ' + fmtD(intervento.rapportino_data) : '') + '</td></tr>' : '';
-  const rowOfferta = intervento.offerta_num
-    ? '<tr style="border-bottom:1px solid #e8edf5"><td style="font-size:11px;color:#888;padding:6px 14px">Ns. Offerta N.</td><td style="font-size:11px;font-weight:600;color:#1a1a2e;padding:6px 14px">' + intervento.offerta_num + '</td></tr>' : '';
-  const rowOrdine = intervento.ordine_num
-    ? '<tr><td style="font-size:11px;color:#888;padding:6px 14px">Ordine Cliente N.</td><td style="font-size:11px;font-weight:600;color:#1a1a2e;padding:6px 14px">' + intervento.ordine_num + (intervento.ordine_data ? ' del ' + fmtD(intervento.ordine_data) : '') + '</td></tr>' : '';
+  const cl = getClient(intervento.cliente);
 
-  // Pre-calcola dati cliente
+  function fmtD(iso){
+    if(!iso) return '—';
+    const p = iso.split('-');
+    return p.length!==3 ? iso : `${p[2]}/${p[1]}/${p[0]}`;
+  }
+
+  const statoLabel = {
+    'aperto':'Aperto',
+    'in-corso':'In Corso',
+    'attesa-ordine':'Attesa Ordine',
+    'chiuso':'Chiuso'
+  }[intervento.stato] || '—';
+
   const clNome = cl ? cl.nome : '—';
-  const clRef   = cl&&cl.ref   ? '<div style="font-size:11px;color:#444;margin-bottom:4px">&#128100; ' + cl.ref + '</div>' : '';
-  const clTel   = cl&&cl.tel   ? '<div style="font-size:11px;color:#444;margin-bottom:4px">&#128222; ' + cl.tel + '</div>' : '';
-  const clEmail = cl&&cl.email ? '<div style="font-size:11px;color:#444;margin-bottom:4px">&#9993; ' + cl.email + '</div>' : '';
-  const clCitta = cl&&cl.citta ? '<div style="font-size:11px;color:#444;margin-bottom:4px">&#128205; ' + cl.citta + '</div>' : '';
-  const clPiva  = cl&&cl.piva  ? '<div style="font-size:11px;color:#444;margin-bottom:4px"><b>P.IVA:</b> ' + cl.piva + '</div>' : '';
-  const clIndirizzo = cl&&cl.indirizzo_completo ? '<div style="font-size:11px;color:#444;margin-bottom:4px">&#127968; ' + cl.indirizzo_completo + '</div>' : '';
 
-  let oreRows='';
-  if(intervento.ore_entries&&intervento.ore_entries.length){
-    oreRows=intervento.ore_entries.map((e,idx)=>`<tr style="border-bottom:1px solid #e5e7eb"><td style="padding:6px 10px;font-size:12px">${idx+1}</td><td style="padding:6px 10px;font-size:12px">${e.data?fmtDataIT(e.data):''}</td><td style="padding:6px 10px;font-size:12px">${e.dalle||'—'}</td><td style="padding:6px 10px;font-size:12px">${e.alle||'—'}</td><td style="padding:6px 10px;font-size:12px">${e.pausa||0} min</td><td style="padding:6px 10px;font-size:12px;font-weight:600">${formatOre(calcolaOreDaEntry(e))}</td></tr>`).join('');
-  }else oreRows=`<tr><td colspan="6" style="padding:10px;font-size:12px;color:#888">Nessuna fascia oraria</td></tr>`;
+  // ---------- ORE ----------
+  let oreRows = '';
+  if(intervento.ore_entries && intervento.ore_entries.length){
+    oreRows = intervento.ore_entries.map((e,idx)=>`
+      <tr>
+        <td>${idx+1}</td>
+        <td>${e.data ? fmtDataIT(e.data) : ''}</td>
+        <td>${e.dalle||'—'}</td>
+        <td>${e.alle||'—'}</td>
+        <td>${e.pausa||0}</td>
+        <td><b>${formatOre(calcolaOreDaEntry(e))}</b></td>
+      </tr>
+    `).join('');
+  } else {
+    oreRows = `<tr><td colspan="6">Nessuna fascia oraria</td></tr>`;
+  }
 
-  // Firme: immagine o spazio vuoto
+  // ---------- FIRME ----------
   const sigTecnico = pdfSignatures.tecnico
-    ? `<img src="${pdfSignatures.tecnico}" style="max-width:100%;height:60px;object-fit:contain;display:block;margin:4px 0">`
-    : `<div style="height:60px;border-bottom:1px solid #aaa;margin:4px 0 0;"></div>`;
+    ? `<img src="${pdfSignatures.tecnico}" style="height:60px">`
+    : `<div class="line"></div>`;
+
   const sigCliente = pdfSignatures.cliente
-    ? `<img src="${pdfSignatures.cliente}" style="max-width:100%;height:60px;object-fit:contain;display:block;margin:4px 0">`
-    : `<div style="height:60px;border-bottom:1px solid #aaa;margin:4px 0 0;"></div>`;
+    ? `<img src="${pdfSignatures.cliente}" style="height:60px">`
+    : `<div class="line"></div>`;
 
-  const tdStyle = 'font-size:11px;color:#888;padding:6px 14px;';
-  const tdValStyle = 'font-size:11px;font-weight:600;color:#1a1a2e;padding:6px 14px';
-  const rowStyle = 'border-bottom:1px solid #e8edf5';
-  const headerStyle = 'background:#1a3a6e;color:#fff;padding:7px 14px;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase';
+  // ---------- HTML ----------
+  const html = `
+  <style>
+    body { font-family: Arial; margin:0; }
+    .page { width:190mm; margin:auto; font-size:12px; }
 
-  let html = '<div style="font-family:Helvetica Neue,Arial,sans-serif;color:#1a1a2e;font-size:13px">';
+    .header {
+      background:#1a3a6e;
+      color:#fff;
+      padding:12px;
+      display:flex;
+      justify-content:space-between;
+    }
 
-  // INTESTAZIONE
-  html += '<div style="background:#1a3a6e;color:#fff;padding:20px 32px 16px;display:flex;justify-content:space-between;align-items:center">';
-  html += '<div>';
-  html += '<div style="font-size:22px;font-weight:800">Tekno<span style="font-weight:400">Automazione</span></div>';
-  html += '<div style="font-size:10px;opacity:.7;letter-spacing:2px;text-transform:uppercase;margin-top:2px">Rapporto Intervento Tecnico</div>';
-  html += '</div>';
-  html += '<div style="text-align:right;font-size:11px;opacity:.8">';
-  html += '<div>Data: ' + fmtD(intervento.data) + '</div>';
-  html += '<div style="margin-top:2px">Intervento #' + intervento.id + '</div>';
-  html += '</div></div>';
+    .title {
+      background:#eef3fb;
+      padding:8px;
+      font-weight:bold;
+    }
 
-  // TITOLO
-  html += '<div style="background:#eef3fb;padding:12px 32px;border-bottom:3px solid #1a3a6e">';
-  html += '<div style="font-size:16px;font-weight:700;color:#1a3a6e">' + (intervento.titolo||'—') + '</div>';
-  if (intervento.indirizzo) html += '<div style="font-size:11px;color:#555;margin-top:2px">&#128205; ' + intervento.indirizzo + '</div>';
-  html += '</div>';
+    .box {
+      border:1px solid #ddd;
+      padding:10px;
+      margin-bottom:10px;
+    }
 
-  html += '<div style="padding:20px 32px">';
+    table {
+      width:100%;
+      border-collapse:collapse;
+      margin-bottom:10px;
+    }
 
-  // RIQUADRI RIFERIMENTI + CLIENTE
-  html += '<div style="display:flex;gap:16px;margin-bottom:18px">';
+    th {
+      background:#1a3a6e;
+      color:#fff;
+      padding:6px;
+    }
 
-  // RIFERIMENTI
-  html += '<div style="flex:1;border:1px solid #dde3ee;border-radius:8px;overflow:hidden">';
-  html += '<div style="' + headerStyle + '">Riferimenti documento</div>';
-  html += '<table style="width:100%;border-collapse:collapse;background:#f8f9fb">';
-  html += '<tr style="' + rowStyle + '"><td style="' + tdStyle + 'width:45%">Stato</td><td style="' + tdValStyle + '">' + statoLabel + '</td></tr>';
-  html += '<tr style="' + rowStyle + '"><td style="' + tdStyle + '">Data intervento</td><td style="' + tdValStyle + '">' + fmtD(intervento.data) + '</td></tr>';
-  if (intervento.rapportino_num) html += '<tr style="' + rowStyle + '"><td style="' + tdStyle + '">Rapportino N.</td><td style="' + tdValStyle + '">' + intervento.rapportino_num + (intervento.rapportino_data ? ' del ' + fmtD(intervento.rapportino_data) : '') + '</td></tr>';
-  if (intervento.offerta_num)    html += '<tr style="' + rowStyle + '"><td style="' + tdStyle + '">Ns. Offerta N.</td><td style="' + tdValStyle + '">' + intervento.offerta_num + '</td></tr>';
-  if (intervento.ordine_num)     html += '<tr><td style="' + tdStyle + '">Ordine Cliente N.</td><td style="' + tdValStyle + '">' + intervento.ordine_num + (intervento.ordine_data ? ' del ' + fmtD(intervento.ordine_data) : '') + '</td></tr>';
-  html += '</table></div>';
+    td {
+      border-bottom:1px solid #eee;
+      padding:6px;
+    }
 
-  // CLIENTE
-  html += '<div style="flex:1;border:1px solid #dde3ee;border-radius:8px;overflow:hidden">';
-  html += '<div style="' + headerStyle + '">Cliente</div>';
-  html += '<div style="background:#f8f9fb;padding:12px 14px">';
-  html += '<div style="font-size:13px;font-weight:700;color:#1a1a2e;margin-bottom:8px">' + clNome + '</div>';
-  if (cl && cl.indirizzo_completo) html += '<div style="font-size:11px;color:#444;margin-bottom:4px">&#127968; ' + cl.indirizzo_completo + '</div>';
-  if (cl && cl.ref)   html += '<div style="font-size:11px;color:#444;margin-bottom:4px">&#128100; ' + cl.ref + '</div>';
-  if (cl && cl.tel)   html += '<div style="font-size:11px;color:#444;margin-bottom:4px">&#128222; ' + cl.tel + '</div>';
-  if (cl && cl.email) html += '<div style="font-size:11px;color:#444;margin-bottom:4px">&#9993; ' + cl.email + '</div>';
-  if (cl && cl.piva)  html += '<div style="font-size:11px;color:#444;margin-bottom:4px"><b>P.IVA:</b> ' + cl.piva + '</div>';
-  if (cl && cl.citta) html += '<div style="font-size:11px;color:#444">&#128205; ' + cl.citta + '</div>';
-  html += '</div></div>';
-  html += '</div>';
+    .grid {
+      display:flex;
+      gap:10px;
+    }
 
-  // ORE LAVORO
-  html += '<div style="margin-bottom:18px">';
-  html += '<div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#1a3a6e;margin-bottom:8px">Dettaglio ore lavoro</div>';
-  html += '<div style="border:1px solid #dde3ee;border-radius:8px;overflow:hidden">';
-  html += '<table style="width:100%;border-collapse:collapse">';
-  html += '<thead><tr style="background:#1a3a6e;color:#fff">';
-  html += '<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600">#</th>';
-  html += '<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600">Data</th>';
-  html += '<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600">Dalle</th>';
-  html += '<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600">Alle</th>';
-  html += '<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600">Pausa</th>';
-  html += '<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600">Ore nette</th>';
-  html += '</tr></thead>';
-  html += '<tbody style="background:#fff">' + oreRows + '</tbody>';
-  html += '<tfoot><tr style="background:#eef3fb;border-top:2px solid #1a3a6e">';
-  html += '<td colspan="5" style="padding:8px 10px;font-size:11px;font-weight:700;color:#1a3a6e;text-align:right">TOTALE ORE</td>';
-  html += '<td style="padding:8px 10px;font-size:14px;font-weight:800;color:#1a3a6e">' + formatOre(parseFloat(intervento.ore_totali||0)) + '</td>';
-  html += '</tr></tfoot></table></div></div>';
+    .col {
+      flex:1;
+      border:1px solid #ddd;
+      padding:10px;
+    }
 
-  // DESCRIZIONE
-  html += '<div style="margin-bottom:20px">';
-  html += '<div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#1a3a6e;margin-bottom:8px">Descrizione lavori</div>';
-  html += '<div style="background:#f8f9fb;border:1px solid #dde3ee;border-radius:8px;padding:14px;font-size:12px;line-height:1.8;min-height:70px;color:#333">' + (intervento.descrizione||'') + '</div>';
-  html += '</div>';
+    .sign {
+      margin-top:30px;
+      display:flex;
+      justify-content:space-between;
+      text-align:center;
+    }
 
-  // FIRME
-  html += '<div>';
-  html += '<div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#1a3a6e;margin-bottom:12px">Firme di accettazione</div>';
-  html += '<div style="display:flex;gap:20px">';
+    .line {
+      border-bottom:1px solid #000;
+      height:60px;
+    }
 
-  // Firma Tecnico
-  html += '<div style="flex:1;border:1px solid #dde3ee;border-radius:8px;overflow:hidden">';
-  html += '<div style="' + headerStyle + '">Tecnico esecutore</div>';
-  html += '<div style="padding:12px 14px;background:#f8f9fb;min-height:110px">';
-  html += sigTecnico;
-  html += '<div style="font-size:10px;color:#555;margin-top:8px">Nome: ___________________________</div>';
-  html += '<div style="font-size:10px;color:#555;margin-top:4px">Data: ' + fmtD(intervento.data) + '</div>';
-  html += '</div></div>';
+    /* 🔥 IMPORTANTISSIMO */
+    table, tr, td, th { page-break-inside: avoid; }
+  </style>
 
-  // Firma Cliente
-  html += '<div style="flex:1;border:1px solid #dde3ee;border-radius:8px;overflow:hidden">';
-  html += '<div style="' + headerStyle + '">Cliente &mdash; Accettazione lavori</div>';
-  html += '<div style="padding:12px 14px;background:#f8f9fb;min-height:110px">';
-  html += sigCliente;
-  html += '<div style="font-size:10px;color:#555;margin-top:8px">Nome: ___________________________</div>';
-  html += '<div style="font-size:10px;color:#555;margin-top:4px">Data: ' + fmtD(intervento.data) + '</div>';
-  html += '</div></div>';
+  <div class="page">
 
-  html += '</div></div>';
-  html += '</div>';
+    <div class="header">
+      <div>
+        <b>Tekno Automazione</b><br>
+        Rapporto Intervento
+      </div>
+      <div style="text-align:right">
+        Data: ${fmtD(intervento.data)}<br>
+        ID: ${intervento.id}
+      </div>
+    </div>
 
-  // FOOTER
-  html += '<div style="background:#f0f2f7;border-top:1px solid #dde3ee;padding:8px 32px;display:flex;justify-content:space-between;align-items:center;margin-top:16px">';
-  html += '<div style="font-size:10px;color:#888">Tekno Automazione &mdash; Documento generato il ' + new Date().toLocaleDateString('it-IT') + '</div>';
-  html += '<div style="font-size:10px;color:#888">Intervento #' + intervento.id + '</div>';
-  html += '</div>';
+    <div class="title">${intervento.titolo || '—'}</div>
 
-  html += '</div>';
+    <div class="grid">
+      <div class="col">
+        <b>Riferimenti</b><br><br>
+        Stato: ${statoLabel}<br>
+        Data: ${fmtD(intervento.data)}
+      </div>
 
-  html2pdf().set({
-    margin: 0,
-    filename: `intervento_${intervento.id}_${fmtD(intervento.data).replace(/\//g,'-')}.pdf`,
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true, allowTaint: true },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-  }).from(html).save();
+      <div class="col">
+        <b>Cliente</b><br><br>
+        ${clNome}<br>
+        ${cl?.indirizzo_completo||''}<br>
+        ${cl?.citta||''}
+      </div>
+    </div>
+
+    <table>
+      <tr>
+        <th>#</th><th>Data</th><th>Dalle</th><th>Alle</th><th>Pausa</th><th>Ore</th>
+      </tr>
+      ${oreRows}
+    </table>
+
+    <div class="box">
+      <b>Descrizione</b><br><br>
+      ${intervento.descrizione || ''}
+    </div>
+
+    <div class="sign">
+      <div>
+        Tecnico<br><br>
+        ${sigTecnico}
+      </div>
+
+      <div>
+        Cliente<br><br>
+        ${sigCliente}
+      </div>
+    </div>
+
+  </div>
+  `;
+
+  // ---------- FIX CRITICO ----------
+  const container = document.createElement('div');
+  container.innerHTML = html;
+  document.body.appendChild(container);
+
+  await html2pdf()
+    .set({
+      margin: 10,
+      filename: `intervento_${intervento.id}.pdf`,
+      html2canvas: {
+        scale: 2,
+        useCORS: true
+      },
+      jsPDF: {
+        unit: 'mm',
+        format: 'a4',
+        orientation: 'portrait'
+      }
+    })
+    .from(container)
+    .save();
+
+  document.body.removeChild(container);
+
   showToast('PDF generato!');
 }
 
