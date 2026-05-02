@@ -1228,25 +1228,59 @@ async function deleteCliente(id) {
 // ─── EXCEL EXPORT ─────────────────────────────────────────────────────────────
 function exportToExcel() {
   const rows = interventi.map(i => {
-    let ore = '';
+    // Ore lavoro: data | dalle → alle (pausa X min) per ogni fascia
+    let oreLavoro = '';
     if (i.ore_entries && i.ore_entries.length) {
-      ore = i.ore_entries.map(e => `${e.dalle||'--:--'} → ${e.alle||'--:--'} (pausa ${e.pausa||0} min)`).join('; ');
-      ore += ` | Totale: ${formatOre(parseFloat(i.ore_totali||0))}`;
-    } else ore = formatOre(parseFloat(i.ore_totali||0));
+      oreLavoro = i.ore_entries.map(e => {
+        const dataPart = e.data ? fmtDataIT(e.data)+' ' : '';
+        return `${dataPart}${e.dalle||'--:--'} → ${e.alle||'--:--'} (pausa ${e.pausa||0} min)`;
+      }).join('; ');
+      oreLavoro += ` | Totale: ${formatOre(parseFloat(i.ore_totali||0))}`;
+    } else {
+      oreLavoro = formatOre(parseFloat(i.ore_totali||0));
+    }
+
+    // Ore viaggio: data | dalle → alle | X km per ogni fascia
+    let oreViaggio = '';
+    const kmTotali = (i.ore_viaggio_entries||[]).reduce((s,e) => s + (parseFloat(e.km)||0), 0);
+    if (i.ore_viaggio_entries && i.ore_viaggio_entries.length) {
+      oreViaggio = i.ore_viaggio_entries.map(e => {
+        const dataPart = e.data ? fmtDataIT(e.data)+' ' : '';
+        return `${dataPart}${e.dalle||'--:--'} → ${e.alle||'--:--'} (${e.km||0} km)`;
+      }).join('; ');
+      oreViaggio += ` | Totale: ${formatOre(parseFloat(i.ore_viaggio_totali||0))} - ${kmTotali} km`;
+    } else {
+      oreViaggio = i.ore_viaggio_totali && parseFloat(i.ore_viaggio_totali) > 0
+        ? formatOre(parseFloat(i.ore_viaggio_totali))
+        : '—';
+    }
+
     return {
-      'ID': i.id, 'Titolo': i.titolo, 'Cliente': getClientName(i.cliente),
-      'Stato Intervento': i.stato, 'Data Intervento': fmtDataIT(i.data)||'',
-      'Indirizzo': i.indirizzo||'', 'Ore Lavoro': ore,
-      'Rapportino N.': i.rapportino_num||'', 'Rapportino Data': fmtDataIT(i.rapportino_data)||'',
-      'Offerta N.': i.offerta_num||'', 'Ordine Cliente N.': i.ordine_num||'',
-      'Ordine Data': fmtDataIT(i.ordine_data)||'', 'Fattura N.': i.fattura_num||'',
-      'Data Fattura': fmtDataIT(i.fattura_data)||'', 'Importo (€)': i.importo||'',
-      'Stato Fattura': i.stato_fattura||'', 'Descrizione': i.descrizione||''
+      'N. Offerta': i.offerta_num||'',
+      'Titolo': i.titolo,
+      'Cliente': getClientName(i.cliente),
+      'Stato Intervento': i.stato,
+      'Data Intervento': fmtDataIT(i.data)||'',
+      'Indirizzo': i.indirizzo||'',
+      'Ore Lavoro': oreLavoro,
+      'Ore Totali Lavoro': formatOre(parseFloat(i.ore_totali||0)),
+      'Ore Viaggio': oreViaggio,
+      'Ore Totali Viaggio': formatOre(parseFloat(i.ore_viaggio_totali||0)),
+      'Km Totali': kmTotali,
+      'Rapportino N.': i.rapportino_num||'',
+      'Rapportino Data': fmtDataIT(i.rapportino_data)||'',
+      'Ordine Cliente N.': i.ordine_num||'',
+      'Ordine Data': fmtDataIT(i.ordine_data)||'',
+      'Fattura N.': i.fattura_num||'',
+      'Data Fattura': fmtDataIT(i.fattura_data)||'',
+      'Importo (€)': i.importo||'',
+      'Stato Fattura': i.stato_fattura||'',
+      'Descrizione': i.descrizione||''
     };
   });
   if (!rows.length) { showToast('Nessun dato da esportare', 'error'); return; }
   const headers = Object.keys(rows[0]);
-  const csv = [headers.join(';'), ...rows.map(r => headers.map(h => `"${String(r[h]||'').replace(/;/g,',').replace(/\n/g,' ')}"`).join(';'))].join('\n');
+  const csv = [headers.join(';'), ...rows.map(r => headers.map(h => `"${String(r[h]||'').replace(/"/g,'""').replace(/\n/g,' ')}"`).join(';'))].join('\n');
   const blob = new Blob(["\uFEFF"+csv], {type:'text/csv;charset=utf-8;'});
   const url = URL.createObjectURL(blob), a = document.createElement('a');
   a.href=url; a.download=`tekno_interventi_${new Date().toISOString().split('T')[0]}.csv`;
@@ -1284,7 +1318,26 @@ function importFromCSV(input) {
           if (ce) clienteId=ce.id;
           else { clienteId=genId('C'); clienti.push({id:clienteId,nome:row.Cliente,ref:'',tel:'',email:'',citta:''}); await appendRow('Clienti',clienteToRow(clienteId,{nome:row.Cliente,ref:'',tel:'',email:'',citta:''})); }
         }
-        const d={titolo:row.Titolo,cliente:clienteId,stato:row['Stato Intervento']||'aperto',data:fmtDataISO(row['Data Intervento']||''),indirizzo:row.Indirizzo||'',descrizione:row.Descrizione||'',ore_entries:[],ore_totali:'0',rapportino_num:row['Rapportino N.']||'',rapportino_data:fmtDataISO(row['Rapportino Data']||''),offerta_num:row['Offerta N.']||'',ordine_num:row['Ordine Cliente N.']||'',ordine_data:fmtDataISO(row['Ordine Data']||''),fattura_num:row['Fattura N.']||'',fattura_data:fmtDataISO(row['Data Fattura']||''),importo:row['Importo (€)']||'',stato_fattura:row['Stato Fattura']||'',files:[]};
+        const d={
+          titolo:row.Titolo, cliente:clienteId,
+          stato:row['Stato Intervento']||'aperto',
+          data:fmtDataISO(row['Data Intervento']||''),
+          indirizzo:row.Indirizzo||'',
+          descrizione:row.Descrizione||'',
+          ore_entries:[], ore_totali:'0',
+          ore_viaggio_entries:[], ore_viaggio_totali:'0',
+          km_totali: row['Km Totali']||'0',
+          rapportino_num:row['Rapportino N.']||'',
+          rapportino_data:fmtDataISO(row['Rapportino Data']||''),
+          offerta_num:row['N. Offerta']||row['Offerta N.']||'',
+          ordine_num:row['Ordine Cliente N.']||'',
+          ordine_data:fmtDataISO(row['Ordine Data']||''),
+          fattura_num:row['Fattura N.']||'',
+          fattura_data:fmtDataISO(row['Data Fattura']||''),
+          importo:row['Importo (€)']||'',
+          stato_fattura:row['Stato Fattura']||'',
+          files:[]
+        };
         nuovi.push({id,d});
         importati++;
       }
@@ -1312,10 +1365,17 @@ async function importBackup(input) {
       const d=JSON.parse(e.target.result);
       if(!confirm(`Importare ${(d.interventi||[]).length} interventi e ${(d.clienti||[]).length} clienti? I dati esistenti verranno mantenuti.`)) return;
       showToast('Importazione in corso...','success');
-      // Append only new records
       for(const c of (d.clienti||[])){if(!clienti.find(x=>x.id===c.id))await appendRow('Clienti',clienteToRow(c.id,c));}
-      for(const i of (d.interventi||[])){if(!interventi.find(x=>x.id===i.id))await appendRow('Interventi',interventoToRow(i.id,i));}
-      await syncAll();showToast('Backup importato!');
+      for(const i of (d.interventi||[])){
+        if(interventi.find(x=>x.id===i.id)) continue;
+        // Retrocompatibilità: garantisce campi viaggio anche su backup vecchi
+        if(!i.ore_viaggio_entries) i.ore_viaggio_entries=[];
+        if(!i.ore_viaggio_totali) i.ore_viaggio_totali='0';
+        if(!i.km_totali) i.km_totali='0';
+        await appendRow('Interventi',interventoToRow(i.id,i));
+      }
+      await syncAll();
+      showToast(`Backup importato! (v${d.version||'?'} del ${d.exportDate?d.exportDate.split('T')[0]:'—'})`);
     }catch{showToast('Errore: file non valido','error');}
   };
   reader.readAsText(file);input.value='';
