@@ -43,7 +43,8 @@
   .btn-warning { background: rgba(240,192,64,0.15); color: var(--accent); border: 1px solid rgba(240,192,64,0.3); }
   .content { padding: 24px 28px; flex: 1; overflow-y: auto; }
   .stats-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-bottom: 28px; }
-  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; position: relative; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; position: relative; cursor: pointer; transition: transform .15s, box-shadow .15s; }
+  .stat-card:hover { transform: translateY(-2px); }
   .stat-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; border-radius:10px 10px 0 0; }
   .stat-card.yellow::before{background:var(--accent)}.stat-card.teal::before{background:var(--accent2)}.stat-card.green::before{background:var(--green)}.stat-card.red::before{background:var(--red)}
   .stat-label { font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); margin-bottom:10px; }
@@ -201,14 +202,14 @@
     <!-- DASHBOARD -->
     <div class="content" id="page-dashboard">
       <div class="stats-grid">
-        <div class="stat-card yellow"><div class="stat-label">Attività Aperte</div><div class="stat-value" id="stat-total">—</div></div>
-        <div class="stat-card teal"><div class="stat-label">In Corso</div><div class="stat-value" id="stat-progress">—</div></div>
-        <div class="stat-card green"><div class="stat-label">Attesa Ordine</div><div class="stat-value" id="stat-closed">—</div></div>
-        <div class="stat-card red"><div class="stat-label">Da Fatturare</div><div class="stat-value" id="stat-toinvoice">—</div></div>
+        <div class="stat-card yellow" id="stat-card-open" data-filter="open" onclick="setDashFilter('open')" title="Mostra Attività Aperte / In Corso"><div class="stat-label">Attività Aperte</div><div class="stat-value" id="stat-total">—</div></div>
+        <div class="stat-card teal" id="stat-card-progress" data-filter="in-corso" onclick="setDashFilter('in-corso')" title="Mostra In Corso"><div class="stat-label">In Corso</div><div class="stat-value" id="stat-progress">—</div></div>
+        <div class="stat-card green" id="stat-card-attesa" data-filter="attesa-ordine" onclick="setDashFilter('attesa-ordine')" title="Mostra Attesa Ordine"><div class="stat-label">Attesa Ordine</div><div class="stat-value" id="stat-closed">—</div></div>
+        <div class="stat-card red" id="stat-card-fatt" data-filter="fatturare" onclick="setDashFilter('fatturare')" title="Mostra Da Fatturare"><div class="stat-label">Da Fatturare</div><div class="stat-value" id="stat-toinvoice">—</div></div>
       </div>
-      <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:14px">Interventi Aperti / In Corso</div>
+      <div id="dash-table-label" style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:14px">Interventi Aperti / In Corso</div>
       <div class="table-wrap"><table>
-        <thead><tr><th>ID</th><th>Titolo</th><th>Cliente</th><th>Stato</th><th>Ore</th><th>Data</th></tr></thead>
+        <thead><tr><th>N. Offerta</th><th>Titolo</th><th>Cliente</th><th>Stato</th><th>Ore</th><th>Data</th></tr></thead>
         <tbody id="dash-tbody"></tbody>
       </table></div>
     </div>
@@ -300,8 +301,24 @@
             <div id="hours-list"></div>
             <button type="button" class="btn-add-hour" onclick="addHourEntry()">+ Aggiungi fascia oraria</button>
           </div>
-          <div class="total-hours" id="total_ore_display">Totale Ore: 0:00</div>
+          <div class="total-hours" id="total_ore_display">Totale Ore Lavoro: 0:00</div>
           <input type="hidden" id="f_ore_totali">
+        </div>
+        <div class="form-group full">
+          <label class="form-label">🚗 Ore Viaggio</label>
+          <div class="hours-container">
+            <div id="hours-viaggio-list"></div>
+            <button type="button" class="btn-add-hour" onclick="addViaggioEntry()">+ Aggiungi ore viaggio</button>
+          </div>
+          <div style="background:var(--orange);color:#fff;padding:10px 16px;border-radius:8px;font-weight:800;font-size:18px;text-align:center;margin-top:12px;font-family:var(--mono)" id="total_viaggio_display">Totale Ore Viaggio: 0:00</div>
+          <input type="hidden" id="f_ore_viaggio_totali">
+        </div>
+        <div class="form-group">
+          <label class="form-label">📍 Km Totali</label>
+          <input class="form-control" id="f_km_totali" type="number" min="0" step="1" placeholder="0" oninput="updateKmDisplay()">
+        </div>
+        <div class="form-group" style="display:flex;align-items:flex-end">
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 16px;font-weight:800;font-size:16px;font-family:var(--mono);color:var(--accent2);width:100%;text-align:center" id="km_display">0 km</div>
         </div>
         <div class="form-group full"><label class="form-label">Indirizzo</label><input class="form-control" id="f_indirizzo"></div>
         <div class="form-group full"><label class="form-label">Descrizione</label><textarea class="form-control" id="f_descrizione" rows="2"></textarea></div>
@@ -380,6 +397,61 @@
 <div class="toast" id="toast"></div>
 
 <script>
+
+/ ─── EMULATORE LOCALSTORAGE PER TEST LOCALE ──────────────────────────────────
+const IS_LOCAL_MODE = true; // Imposta a false per tornare a usare Google Sheets
+
+if (IS_LOCAL_MODE) {
+  console.warn("⚠️ MODALITÀ LOCALE ATTIVA: I dati verranno salvati nel browser.");
+
+  // Mock delle funzioni GAPI per evitare errori
+  var gapi = { 
+    load: (p, cb) => cb(), 
+    client: { 
+      init: () => Promise.resolve(),
+      setToken: () => {},
+      getToken: () => ({ access_token: 'local-token' }),
+      sheets: { spreadsheets: { 
+        get: () => Promise.resolve({ result: { sheets: [{ properties: { title: 'Interventi' } }] } }),
+        values: {
+          get: ({ range }) => {
+            const key = range.split('!')[0]; // Prende 'Interventi' o 'Clienti'
+            const data = JSON.parse(localStorage.getItem('td_' + key)) || [];
+            return Promise.resolve({ result: { values: data } });
+          },
+          update: ({ range, resource }) => {
+            const key = range.split('!')[0];
+            localStorage.setItem('td_' + key, JSON.stringify(resource.values));
+            return Promise.resolve();
+          }
+        }
+      }}
+    }
+  };
+
+  // Mock per il login Google
+  var google = { accounts: { oauth2: { initTokenClient: () => ({ requestAccessToken: () => onSignedIn() }) } } };
+
+  // Sovrascriviamo fetch per simulare Google Drive
+  const originalFetch = window.fetch;
+  window.fetch = async (...args) => {
+    if (args[0].includes('googleapis.com/drive')) {
+      console.log("Simulazione Drive: File ignorato in locale");
+      return new Response(JSON.stringify({ id: 'local_id', files: [], webViewLink: '#' }), { status: 200 });
+    }
+    return originalFetch(...args);
+  };
+
+  // Funzione per saltare il caricamento Google e andare diretti ai dati
+  window.addEventListener('load', () => {
+    setTimeout(() => {
+      if (typeof onSignedIn === 'function') onSignedIn();
+    }, 500);
+  });
+}
+// ──────────────────────────────────────────────────────────────────────────────
+
+
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const SHEET_ID = '1hqDCUSFaDBwyPnP3d_dFUBsHNrnC3LZNdyFKz2FAEn4';
 const DISCOVERY_DOC = 'https://sheets.googleapis.com/$discovery/rest?version=v4';
@@ -394,7 +466,7 @@ let driveFolderId = null;
 // ─── STATE ────────────────────────────────────────────────────────────────────
 let interventi = [], clienti = [];
 let editingId = null, editingClienteId = null;
-let pendingFiles = [], oreEntries = [];
+let pendingFiles = [], oreEntries = [], oreViaggioEntries = [];
 let currentFilter = 'tutti', currentFatturaFilter = 'tutti', currentPage = 'dashboard';
 let calYear, calMonth;
 let gapiInited = false, gisInited = false, tokenClient;
@@ -574,7 +646,7 @@ async function ensureSheets() {
 }
 
 async function writeHeadersIfEmpty() {
-  const intH = [['ID','Titolo','Cliente','Stato','Data','Indirizzo','Descrizione','OreEntries','OreTotali','RapportinoNum','RapportinoData','OffertaNum','OrdineNum','OrdineData','FatturaNum','FatturaData','Importo','StatoFattura','Files']];
+  const intH = [['ID','Titolo','Cliente','Stato','Data','Indirizzo','Descrizione','OreEntries','OreTotali','RapportinoNum','RapportinoData','OffertaNum','OrdineNum','OrdineData','FatturaNum','FatturaData','Importo','StatoFattura','Files','OreViaggioEntries','OreViaggioTotali','KmTotali']];
   const cliH = [['ID','Nome','Referente','Telefono','Email','Città','P.IVA','Indirizzo']];
   try {
     const r1 = await gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Interventi!A1' });
@@ -612,7 +684,7 @@ async function syncAll() {
   try {
     await refreshTokenIfNeeded();
     const [r1, r2] = await Promise.all([
-      gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Interventi!A2:S' }),
+      gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Interventi!A2:V' }),
       gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Clienti!A2:H' }),
     ]);
     interventi = (r1.result.values || []).map(r => ({
@@ -623,7 +695,9 @@ async function syncAll() {
       offerta_num: r[11]||'', ordine_num: r[12]||'', ordine_data: r[13]||'',
       fattura_num: r[14]||'', fattura_data: r[15]||'',
       importo: r[16]||'', stato_fattura: r[17]||'',
-      files: safeJSON(r[18], [])
+      files: safeJSON(r[18], []),
+      ore_viaggio_entries: safeJSON(r[19], []), ore_viaggio_totali: r[20]||'0',
+      km_totali: r[21]||'0'
     })).filter(i => i.id);
     clienti = (r2.result.values || []).map(r => ({
       id: r[0]||'', nome: r[1]||'', ref: r[2]||'', tel: r[3]||'', email: r[4]||'', citta: r[5]||'', piva: r[6]||'', indirizzo_completo: r[7]||''
@@ -697,7 +771,8 @@ function interventoToRow(id, d) {
     JSON.stringify(d.ore_entries||[]), d.ore_totali||'0',
     d.rapportino_num, d.rapportino_data, d.offerta_num, d.ordine_num, d.ordine_data,
     d.fattura_num, d.fattura_data, d.importo, d.stato_fattura,
-    JSON.stringify(d.files||[])];
+    JSON.stringify(d.files||[]),
+    JSON.stringify(d.ore_viaggio_entries||[]), d.ore_viaggio_totali||'0', d.km_totali||'0'];
 }
 function clienteToRow(id, d) {
   return [id, d.nome, d.ref||'', d.tel||'', d.email||'', d.citta||'', d.piva||'', d.indirizzo_completo||''];
@@ -713,9 +788,37 @@ function calcolaOreDaEntry(e) {
 }
 function calcolaOreTotaliMulti() {
   const tot=oreEntries.reduce((s,e)=>s+calcolaOreDaEntry(e),0);
-  document.getElementById('total_ore_display').innerHTML=`Totale Ore: ${formatOre(tot)}`;
+  document.getElementById('total_ore_display').innerHTML=`Totale Ore Lavoro: ${formatOre(tot)}`;
   document.getElementById('f_ore_totali').value=tot.toFixed(2);
   return tot;
+}
+function calcolaOreViaggioTotali() {
+  const tot=oreViaggioEntries.reduce((s,e)=>s+calcolaOreDaEntry(e),0);
+  const el=document.getElementById('total_viaggio_display');
+  if(el) el.innerHTML=`Totale Ore Viaggio: ${formatOre(tot)}`;
+  const inp=document.getElementById('f_ore_viaggio_totali');
+  if(inp) inp.value=tot.toFixed(2);
+  return tot;
+}
+function updateKmDisplay() {
+  const v=parseFloat(document.getElementById('f_km_totali')?.value||0);
+  const el=document.getElementById('km_display');
+  if(el) el.textContent=(isNaN(v)?0:v)+' km';
+}
+function addViaggioEntry(dalle='',alle='',pausa='0',data='') { oreViaggioEntries.push({id:Date.now()+Math.random()+0.5,dalle,alle,pausa,data}); renderViaggioList(); }
+function removeViaggioEntry(id) { oreViaggioEntries=oreViaggioEntries.filter(e=>e.id!==id); renderViaggioList(); }
+function updateViaggioEntry(id,field,value) { const e=oreViaggioEntries.find(e=>e.id===id); if(e){e[field]=value;calcolaOreViaggioTotali();} }
+function renderViaggioList() {
+  const c=document.getElementById('hours-viaggio-list'); if(!c) return;
+  if (!oreViaggioEntries.length) { c.innerHTML='<div style="text-align:center;padding:12px;color:var(--muted);font-size:12px">Nessuna fascia viaggio.</div>'; calcolaOreViaggioTotali(); return; }
+  c.innerHTML=oreViaggioEntries.map(e=>`<div class="hours-entry">
+    <div class="form-group"><label style="font-size:10px">Data</label><input type="date" class="form-control" value="${e.data||''}" onchange="updateViaggioEntry(${e.id},'data',this.value)"></div>
+    <div class="form-group"><label style="font-size:10px">Dalle</label><input type="time" class="form-control" value="${e.dalle}" onchange="updateViaggioEntry(${e.id},'dalle',this.value)"></div>
+    <div class="form-group"><label style="font-size:10px">Alle</label><input type="time" class="form-control" value="${e.alle}" onchange="updateViaggioEntry(${e.id},'alle',this.value)"></div>
+    <div class="form-group"><label style="font-size:10px">Pausa (min)</label><input type="number" step="5" class="form-control" value="${e.pausa}" onchange="updateViaggioEntry(${e.id},'pausa',this.value)"></div>
+    <button class="btn-remove" onclick="removeViaggioEntry(${e.id})">✕</button>
+  </div>`).join('');
+  calcolaOreViaggioTotali();
 }
 function addHourEntry(dalle='',alle='',pausa='0',data='') { oreEntries.push({id:Date.now()+Math.random(),dalle,alle,pausa,data}); renderHoursList(); }
 function removeHourEntry(id) { oreEntries=oreEntries.filter(e=>e.id!==id); renderHoursList(); }
@@ -774,15 +877,29 @@ function updateYearFilterOptions() {
 
 function renderAll() { renderDashboard(); renderTable(); renderFatture(); if(currentPage==='clienti')renderClienti(); if(currentPage==='calendario')renderCalendar(); updateYearFilterOptions(); }
 
+let dashFilter = 'open';
+function setDashFilter(f) { dashFilter=f; renderDashboard(); }
 function renderDashboard() {
   document.getElementById('stat-total').textContent=interventi.filter(i=>i.stato==='aperto'||i.stato==='in-corso').length;
   document.getElementById('stat-progress').textContent=interventi.filter(i=>i.stato==='in-corso').length;
   document.getElementById('stat-closed').textContent=interventi.filter(i=>i.stato==='attesa-ordine').length;
   document.getElementById('stat-toinvoice').textContent=interventi.filter(i=>i.stato_fattura==='emettere').length;
-  const rec=interventi.filter(i=>i.stato==='aperto'||i.stato==='in-corso').sort((a,b)=>new Date(b.data)-new Date(a.data)).slice(0,5);
+  ['stat-card-open','stat-card-progress','stat-card-attesa','stat-card-fatt'].forEach(id=>{
+    const el=document.getElementById(id); if(!el) return;
+    if(el.dataset.filter===dashFilter){el.style.outline='2px solid var(--blue)';el.style.boxShadow='0 0 0 4px rgba(58,134,255,0.15)';}
+    else{el.style.outline='none';el.style.boxShadow='none';}
+  });
+  let rec;
+  if(dashFilter==='in-corso') rec=interventi.filter(i=>i.stato==='in-corso');
+  else if(dashFilter==='attesa-ordine') rec=interventi.filter(i=>i.stato==='attesa-ordine');
+  else if(dashFilter==='fatturare') rec=interventi.filter(i=>i.stato_fattura==='emettere');
+  else rec=interventi.filter(i=>i.stato==='aperto'||i.stato==='in-corso');
+  rec=rec.sort((a,b)=>new Date(b.data)-new Date(a.data));
+  const labels={'open':'Interventi Aperti / In Corso','in-corso':'In Corso','attesa-ordine':'Attesa Ordine','fatturare':'Da Fatturare'};
+  const lbl=document.getElementById('dash-table-label'); if(lbl) lbl.textContent=labels[dashFilter]||'Interventi';
   document.getElementById('dash-tbody').innerHTML=rec.length
-    ?rec.map(i=>`<tr onclick="openDetail('${i.id}')"><td class="td-id">#${i.id}</td><td>${i.titolo}</td><td>${getClientName(i.cliente)}</td><td>${statoInterventoBadge(i.stato)}</td><td>${formatOre(parseFloat(i.ore_totali||0))}</td><td>${fmtDataIT(i.data)||'—'}</td></tr>`).join('')
-    :'<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--muted)">Nessun intervento aperto</td></tr>';
+    ?rec.map(i=>`<tr onclick="openDetail('${i.id}')"><td class="td-id">${i.offerta_num||'—'}</td><td>${i.titolo}</td><td>${getClientName(i.cliente)}</td><td>${statoInterventoBadge(i.stato)}</td><td>${formatOre(parseFloat(i.ore_totali||0))}</td><td>${fmtDataIT(i.data)||'—'}</td></tr>`).join('')
+    :'<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--muted)">Nessun intervento trovato</td></tr>';
 }
 
 function renderTable() {
@@ -857,14 +974,17 @@ function showPage(page) {
 
 // ─── INTERVENTI CRUD ──────────────────────────────────────────────────────────
 function openNewIntervento() {
-  editingId=null; pendingFiles=[]; oreEntries=[];
+  editingId=null; pendingFiles=[]; oreEntries=[]; oreViaggioEntries=[];
   document.getElementById('modal-title-intervento').textContent='Nuovo Intervento';
   ['f_titolo','f_indirizzo','f_descrizione','f_rapportino_num','f_offerta_num','f_ordine_num','f_fattura_num','f_fattura_data','f_rapportino_data','f_ordine_data','f_importo'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('f_stato').value='aperto';
   document.getElementById('f_data').value=new Date().toISOString().split('T')[0];
   document.getElementById('f_stato_fattura').value='';
   document.getElementById('file_preview').innerHTML='';
+  if(document.getElementById('f_km_totali')) document.getElementById('f_km_totali').value='';
+  updateKmDisplay();
   renderHoursList();
+  renderViaggioList();
   document.getElementById('f_stato').onchange = function() {
     if (this.value !== 'chiuso') {
       document.getElementById('f_stato_fattura').value = '';
@@ -886,6 +1006,7 @@ function openEditIntervento(id) {
   const i=interventi.find(x=>x.id===id); if(!i) return;
   editingId=id; pendingFiles=i.files?[...i.files]:[];
   oreEntries=(i.ore_entries&&i.ore_entries.length)?i.ore_entries.map(e=>({id:Date.now()+Math.random(),dalle:e.dalle||'',alle:e.alle||'',pausa:e.pausa||'0',data:e.data||''})):[];
+  oreViaggioEntries=(i.ore_viaggio_entries&&i.ore_viaggio_entries.length)?i.ore_viaggio_entries.map(e=>({id:Date.now()+Math.random()+0.5,dalle:e.dalle||'',alle:e.alle||'',pausa:e.pausa||'0',data:e.data||''})):[]; 
   document.getElementById('modal-title-intervento').textContent='Modifica Intervento';
   document.getElementById('f_titolo').value=i.titolo||'';
   document.getElementById('f_stato').value=i.stato||'aperto';
@@ -902,7 +1023,9 @@ function openEditIntervento(id) {
   document.getElementById('f_importo').value=i.importo||'';
   document.getElementById('f_stato_fattura').value=i.stato_fattura||'';
   renderHoursList();
-  document.getElementById('f_cliente').innerHTML='<option value="">— Seleziona —</option>'+clienti.map(c=>`<option value="${c.id}"${c.id===i.cliente?' selected':''}>${c.nome}</option>`).join('');
+  renderViaggioList();
+  if(document.getElementById('f_km_totali')) document.getElementById('f_km_totali').value=i.km_totali||'';
+  updateKmDisplay();'<option value="">— Seleziona —</option>'+clienti.map(c=>`<option value="${c.id}"${c.id===i.cliente?' selected':''}>${c.nome}</option>`).join('');
   renderFilePreview();
   document.getElementById('f_stato').onchange = function() {
     if (this.value !== 'chiuso') {
@@ -990,14 +1113,17 @@ async function saveIntervento() {
     importo:document.getElementById('f_importo').value,
     stato_fattura:statoFatt,
     ore_totali:document.getElementById('f_ore_totali').value||'0',
-    ore_entries:oreEntries.map(e=>({data:e.data||'',dalle:e.dalle,alle:e.alle,pausa:e.pausa}))
+    ore_entries:oreEntries.map(e=>({data:e.data||'',dalle:e.dalle,alle:e.alle,pausa:e.pausa})),
+    ore_viaggio_totali:document.getElementById('f_ore_viaggio_totali')?.value||'0',
+    ore_viaggio_entries:oreViaggioEntries.map(e=>({data:e.data||'',dalle:e.dalle,alle:e.alle,pausa:e.pausa})),
+    km_totali:document.getElementById('f_km_totali')?.value||'0'
   };
 
   try {
     await refreshTokenIfNeeded();
     const id=editingId||genId('I');
     const row=interventoToRow(id,d);
-    if(editingId) await updateSheetRow('Interventi',editingId,row,'S');
+    if(editingId) await updateSheetRow('Interventi',editingId,row,'V');
     else await appendRow('Interventi',row);
     await syncAll();
     modalDirty = false;
@@ -1016,6 +1142,7 @@ async function saveIntervento() {
 function openDetail(id) {
   const i=interventi.find(x=>x.id===id); if(!i) return;
   let oreHtml=(i.ore_entries&&i.ore_entries.length)?i.ore_entries.map(e=>`<span style='color:var(--accent);font-weight:700'>${e.data?fmtDataIT(e.data):''}</span> ${e.dalle||'—'} → ${e.alle||'—'} (pausa ${e.pausa||0} min)`).join('<br>')+`<br><strong>Totale: ${formatOre(parseFloat(i.ore_totali||0))}</strong>`:`<strong>${formatOre(parseFloat(i.ore_totali||0))}</strong>`;
+  let oreViaggioHtml=(i.ore_viaggio_entries&&i.ore_viaggio_entries.length)?i.ore_viaggio_entries.map(e=>`<span style='color:var(--orange);font-weight:700'>${e.data?fmtDataIT(e.data):''}</span> ${e.dalle||'—'} → ${e.alle||'—'} (pausa ${e.pausa||0} min)`).join('<br>')+`<br><strong>Totale: ${formatOre(parseFloat(i.ore_viaggio_totali||0))}</strong>`:`<strong>${formatOre(parseFloat(i.ore_viaggio_totali||0))}</strong>`;
   document.getElementById('det_titolo').textContent=i.titolo;
   document.getElementById('det_id').textContent='#'+i.id;
   document.getElementById('detail_body').innerHTML=`
@@ -1026,6 +1153,8 @@ function openDetail(id) {
       <div><div style="font-size:10px;color:var(--muted)">INDIRIZZO</div><div>${i.indirizzo||'—'}</div></div>
       <div><div style="font-size:10px;color:var(--muted)">ORE LAVORO</div><div>${oreHtml}</div></div>
       <div><div style="font-size:10px;color:var(--muted)">RAPPORTINO</div><div>${i.rapportino_num?`${i.rapportino_num} del ${i.rapportino_data||'—'}`:'—'}</div></div>
+      <div><div style="font-size:10px;color:var(--orange)">🚗 ORE VIAGGIO</div><div>${oreViaggioHtml}</div></div>
+      <div><div style="font-size:10px;color:var(--accent2)">📍 KM TOTALI</div><div style="font-family:var(--mono);font-weight:700">${parseFloat(i.km_totali||0)} km</div></div>
       <div><div style="font-size:10px;color:var(--muted)">OFFERTA N.</div><div>${i.offerta_num||'—'}</div></div>
       <div><div style="font-size:10px;color:var(--muted)">ORDINE CLIENTE</div><div>${i.ordine_num?`${i.ordine_num} del ${i.ordine_data||'—'}`:'—'}</div></div>
       <div style="grid-column:1/-1;background:var(--surface2);padding:12px;border-radius:8px">
@@ -1353,251 +1482,185 @@ function confirmSignaturesAndPrint() {
 }
 
 function exportToPDF(intervento) {
-  const cliente = getClient(intervento.cliente);
-  
-  function formatDate(isoDate) {
-    if (!isoDate) return '—';
-    const parts = isoDate.split('-');
-    if (parts.length !== 3) return isoDate;
-    return `${parts[2]}/${parts[1]}/${parts[0]}`;
-  }
-  
-  function formatOrePDF(v) {
-    const h = Math.floor(v);
-    const m = Math.round((v - h) * 60);
-    return m === 60 ? `${h + 1}:00` : `${h}:${m.toString().padStart(2, '0')}`;
-  }
-  
-  // Calcola ore totali
-  let oreRows = '';
-  let oreTotali = 0;
-  
-  if (intervento.ore_entries && intervento.ore_entries.length) {
-    intervento.ore_entries.forEach((entry, idx) => {
-      let oreNette = 0;
-      if (entry.dalle && entry.alle) {
-        const [dh, dm] = entry.dalle.split(':').map(Number);
-        const [ah, am] = entry.alle.split(':').map(Number);
-        let h = (ah + am/60) - (dh + dm/60);
-        if (h < 0) h += 24;
-        oreNette = Math.max(0, h - (parseFloat(entry.pausa) || 0) / 60);
-        oreTotali += oreNette;
-      }
-      
-      oreRows += `
-        <tr>
-          <td style="padding: 6px 8px; border-bottom: 1px solid #eee;">${idx + 1}</td>
-          <td style="padding: 6px 8px; border-bottom: 1px solid #eee;">${entry.data || ''}</td>
-          <td style="padding: 6px 8px; border-bottom: 1px solid #eee;">${entry.dalle || '—'}</td>
-          <td style="padding: 6px 8px; border-bottom: 1px solid #eee;">${entry.alle || '—'}</td>
-          <td style="padding: 6px 8px; border-bottom: 1px solid #eee;">${entry.pausa || 0} min</td>
-          <td style="padding: 6px 8px; border-bottom: 1px solid #eee; font-weight: bold;">${formatOrePDF(oreNette)}</td>
-        </tr>
-      `;
-    });
-  }
-  
-  const oreTotaliFormatted = formatOrePDF(oreTotali || parseFloat(intervento.ore_totali || 0));
-  
-  // Stato con badge colorato
-  const statoColors = {
-    'aperto': '#3ecfcf',
-    'in-corso': '#f0c040', 
-    'attesa-ordine': '#f09050',
-    'chiuso': '#50d090'
-  };
-  const statoColor = statoColors[intervento.stato] || '#7878a0';
-  const statoLabel = {
-    'aperto': 'Aperto',
-    'in-corso': 'In Corso',
-    'attesa-ordine': 'Attesa Ordine',
-    'chiuso': 'Chiuso'
-  }[intervento.stato] || intervento.stato;
-  
-  // Nome file per il PDF
-  const clienteNome = cliente ? cliente.nome.replace(/[^a-z0-9]/gi, '_') : 'cliente';
-  const filename = `intervento_${clienteNome}_${formatDate(intervento.data).replace(/\//g, '-')}.pdf`;
-  
-  // HTML del documento (senza script auto-eseguenti)
-  const htmlContent = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>Intervento ${intervento.id}</title>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { 
-    font-family: Arial, Helvetica, sans-serif; 
-    font-size: 11px;
-    color: #1a1a2e;
-    line-height: 1.4;
-    padding: 20px;
-    background: white;
-  }
-  .document { max-width: 190mm; margin: 0 auto; background: white; }
-  .header { background: #1a3a6e; color: white; padding: 15px 20px; border-radius: 8px 8px 0 0; margin-bottom: 15px; display: flex; justify-content: space-between; flex-wrap: wrap; }
-  .logo { font-size: 22px; font-weight: bold; }
-  .logo span { font-weight: normal; }
-  .sub { font-size: 10px; opacity: 0.8; margin-top: 5px; }
-  .right { text-align: right; font-size: 10px; }
-  .card { border: 1px solid #ddd; border-radius: 6px; margin-bottom: 15px; overflow: hidden; }
-  .card-title { background: #f5f7fa; padding: 10px 15px; font-weight: bold; font-size: 11px; border-bottom: 1px solid #ddd; }
-  .card-body { padding: 12px 15px; }
-  .flex-row { display: flex; margin-bottom: 8px; flex-wrap: wrap; }
-  .label { width: 110px; font-weight: 600; color: #555; font-size: 10px; }
-  .value { flex: 1; font-size: 10px; }
-  .badge { display: inline-block; padding: 3px 12px; border-radius: 20px; font-size: 10px; font-weight: bold; background: ${statoColor}20; color: ${statoColor}; }
-  .two-cols { display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px; }
-  .col { flex: 1; min-width: 240px; }
-  .data-table { width: 100%; border-collapse: collapse; }
-  .data-table th { background: #f5f7fa; padding: 8px; font-size: 9px; text-align: left; border-bottom: 1px solid #ddd; }
-  .data-table td { padding: 6px 8px; border-bottom: 1px solid #eee; }
-  .total-row { background: #f0f7ff; }
-  .total-row td { font-weight: bold; border-bottom: none; }
-  .desc-box { background: #f9f9f9; padding: 10px; border-radius: 4px; min-height: 50px; font-size: 10px; }
-  .signatures { display: flex; gap: 20px; margin-bottom: 15px; flex-wrap: wrap; }
-  .sign-box { flex: 1; border: 1px solid #ddd; border-radius: 6px; text-align: center; }
-  .sign-title { background: #f5f7fa; padding: 8px; font-weight: bold; font-size: 10px; border-bottom: 1px solid #ddd; }
-  .sign-area { padding: 20px; }
-  .sign-line { border-top: 1px solid #ddd; margin: 10px 0; }
-  .field-text { font-size: 9px; color: #666; }
-  .footer { background: #f5f7fa; padding: 8px 15px; font-size: 8px; color: #888; text-align: center; border-top: 1px solid #ddd; margin-top: 15px; }
-  .print-btn { text-align: center; margin-top: 20px; padding: 15px; }
-  .print-btn button { padding: 10px 24px; font-size: 12px; font-weight: bold; background: #1a3a6e; color: white; border: none; border-radius: 6px; cursor: pointer; }
-  @media print {
-    body { padding: 0; margin: 0; }
-    .no-print { display: none; }
-  }
-</style>
-</head>
-<body>
-<div class="document">
-  
-  <!-- HEADER -->
-  <div class="header">
-    <div>
-      <div class="logo">Tekno<span>Automazione</span></div>
-      <div class="sub">Rapporto Intervento Tecnico</div>
-    </div>
-    <div class="right">
-      <div>Data: ${formatDate(intervento.data)}</div>
-      <div>Intervento #${intervento.id}</div>
-    </div>
-  </div>
-  
-  <!-- TITOLO -->
-  <div class="card">
-    <div class="card-title">📋 TITOLO INTERVENTO</div>
-    <div class="card-body">
-      <div class="flex-row">
-        <span class="label">Titolo:</span>
-        <span class="value">${intervento.titolo || '—'}</span>
-      </div>
-      ${intervento.indirizzo ? `
-      <div class="flex-row">
-        <span class="label">Indirizzo:</span>
-        <span class="value">${intervento.indirizzo}</span>
-      </div>
-      ` : ''}
-    </div>
-  </div>
-  
-  <!-- RIFERIMENTI E CLIENTE -->
-  <div class="two-cols">
-    <div class="col">
-      <div class="card">
-        <div class="card-title">📄 RIFERIMENTI DOCUMENTO</div>
-        <div class="card-body">
-          <div class="flex-row"><span class="label">Stato:</span><span class="value"><span class="badge">${statoLabel}</span></span></div>
-          <div class="flex-row"><span class="label">Data intervento:</span><span class="value">${formatDate(intervento.data)}</span></div>
-          ${intervento.rapportino_num ? `<div class="flex-row"><span class="label">Rapportino N.:</span><span class="value">${intervento.rapportino_num}${intervento.rapportino_data ? ' del ' + formatDate(intervento.rapportino_data) : ''}</span></div>` : ''}
-          ${intervento.offerta_num ? `<div class="flex-row"><span class="label">Offerta N.:</span><span class="value">${intervento.offerta_num}</span></div>` : ''}
-          ${intervento.ordine_num ? `<div class="flex-row"><span class="label">Ordine Cliente:</span><span class="value">${intervento.ordine_num}${intervento.ordine_data ? ' del ' + formatDate(intervento.ordine_data) : ''}</span></div>` : ''}
-        </div>
-      </div>
-    </div>
-    <div class="col">
-      <div class="card">
-        <div class="card-title">🏢 DATI CLIENTE</div>
-        <div class="card-body">
-          <div class="flex-row"><span class="label">Ragione Sociale:</span><span class="value"><b>${cliente ? cliente.nome : '—'}</b></span></div>
-          ${cliente && cliente.indirizzo_completo ? `<div class="flex-row"><span class="label">Indirizzo:</span><span class="value">${cliente.indirizzo_completo}</span></div>` : ''}
-          ${cliente && cliente.ref ? `<div class="flex-row"><span class="label">Referente:</span><span class="value">${cliente.ref}</span></div>` : ''}
-          ${cliente && cliente.tel ? `<div class="flex-row"><span class="label">Telefono:</span><span class="value">${cliente.tel}</span></div>` : ''}
-          ${cliente && cliente.email ? `<div class="flex-row"><span class="label">Email:</span><span class="value">${cliente.email}</span></div>` : ''}
-          ${cliente && cliente.piva ? `<div class="flex-row"><span class="label">P.IVA:</span><span class="value">${cliente.piva}</span></div>` : ''}
-          ${cliente && cliente.citta ? `<div class="flex-row"><span class="label">Città:</span><span class="value">${cliente.citta}</span></div>` : ''}
-        </div>
-      </div>
-    </div>
-  </div>
-  
-  <!-- ORE LAVORO -->
-  <div class="card">
-    <div class="card-title">⏱️ DETTAGLIO ORE LAVORO</div>
-    <div style="padding: 0;">
-      <table class="data-table" style="width: 100%;">
-        <thead><tr><th style="width:8%">#</th><th style="width:22%">Data</th><th style="width:15%">Dalle</th><th style="width:15%">Alle</th><th style="width:15%">Pausa</th><th style="width:25%">Ore nette</th></tr></thead>
-        <tbody>${oreRows || '<tr><td colspan="6" style="text-align:center; padding:20px;">Nessuna ora registrata</td></tr>'}</tbody>
-        <tfoot><tr class="total-row"><td colspan="5" style="text-align:right; padding:8px;">TOTALE ORE</td><td style="padding:8px; font-weight:bold; font-size:12px; color:#d4a000;">${oreTotaliFormatted}</td></tr></tfoot>
-      </table>
-    </div>
-  </div>
-  
-  <!-- DESCRIZIONE -->
-  <div class="card">
-    <div class="card-title">📝 DESCRIZIONE LAVORI</div>
-    <div class="card-body">
-      <div class="desc-box">${(intervento.descrizione || '').replace(/\n/g, '<br>') || '—'}</div>
-    </div>
-  </div>
-  
-  <!-- FIRME -->
-  <div class="signatures">
-    <div class="sign-box">
-      <div class="sign-title">✍️ TECNICO ESECUTORE</div>
-      <div class="sign-area">
-        <div class="sign-line"></div>
-        <div class="field-text">Nome: _________________________</div>
-        <div class="field-text" style="margin-top:5px;">Data: ${formatDate(intervento.data)}</div>
-      </div>
-    </div>
-    <div class="sign-box">
-      <div class="sign-title">✍️ CLIENTE - ACCETTAZIONE LAVORI</div>
-      <div class="sign-area">
-        <div class="sign-line"></div>
-        <div class="field-text">Nome: _________________________</div>
-        <div class="field-text" style="margin-top:5px;">Data: ${formatDate(intervento.data)}</div>
-      </div>
-    </div>
-  </div>
-  
-  <!-- FOOTER -->
-  <div class="footer">
-    <div>Tekno Automazione</div>
-    <div>Documento generato il ${new Date().toLocaleDateString('it-IT')}</div>
-  </div>
-  
-  <!-- BOTTONE PER STAMPARE (l'utente clicca manualmente) -->
-  <div class="print-btn no-print">
-    <button onclick="window.print()">🖨️ Stampa / Salva PDF</button>
-  </div>
-  
-</div>
-</body>
-</html>`;
-  
-  // Apri la finestra con il contenuto
-  const printWindow = window.open('', '_blank');
-  if (printWindow) {
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
-    showToast('Documento aperto. Clicca su "Stampa / Salva PDF" per salvare.', 'success');
-  } else {
-    showToast('Il browser ha bloccato il popup. Consenti i popup per questo sito.', 'error');
-  }
-}
+  const cl=getClient(intervento.cliente);
+  function fmtD(iso){if(!iso)return'—';const p=iso.split('-');return p.length!==3?iso:`${p[2]}/${p[1]}/${p[0]}`;}
+  const statoLabel={'aperto':'Aperto','in-corso':'In Corso','attesa-ordine':'Attesa Ordine','chiuso':'Chiuso'}[intervento.stato]||intervento.stato||'—';
 
+  const clNome = cl ? cl.nome : '—';
+  const nomePulito = clNome.replace(/[^a-zA-Z0-9\s]/g,'').replace(/\s+/g,'_').substring(0,30);
+  const dataFile = fmtD(intervento.data).replace(/\//g,'-');
+
+  let oreRows='';
+  if(intervento.ore_entries&&intervento.ore_entries.length){
+    oreRows=intervento.ore_entries.map((e,idx)=>
+      '<tr style="border-bottom:1px solid #e5e7eb">' +
+      '<td style="padding:5px 8px;font-size:11px">'+(idx+1)+'</td>' +
+      '<td style="padding:5px 8px;font-size:11px">'+(e.data?fmtDataIT(e.data):'')+'</td>' +
+      '<td style="padding:5px 8px;font-size:11px">'+(e.dalle||'—')+'</td>' +
+      '<td style="padding:5px 8px;font-size:11px">'+(e.alle||'—')+'</td>' +
+      '<td style="padding:5px 8px;font-size:11px">'+(e.pausa||0)+' min</td>' +
+      '<td style="padding:5px 8px;font-size:11px;font-weight:600">'+formatOre(calcolaOreDaEntry(e))+'</td>' +
+      '</tr>'
+    ).join('');
+  } else {
+    oreRows='<tr><td colspan="6" style="padding:10px;font-size:11px;color:#888">Nessuna fascia oraria</td></tr>';
+  }
+
+  const sigTecnico = pdfSignatures.tecnico
+    ? '<img src="'+pdfSignatures.tecnico+'" style="max-width:100%;height:55px;object-fit:contain;display:block;margin:4px 0">'
+    : '<div style="height:55px;border-bottom:1px solid #aaa;margin:4px 0 0"></div>';
+  const sigCliente = pdfSignatures.cliente
+    ? '<img src="'+pdfSignatures.cliente+'" style="max-width:100%;height:55px;object-fit:contain;display:block;margin:4px 0">'
+    : '<div style="height:55px;border-bottom:1px solid #aaa;margin:4px 0 0"></div>';
+
+  const HS = 'background:#1a3a6e;color:#fff;padding:7px 14px;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase';
+  const RS = 'border-bottom:1px solid #e8edf5';
+  const TD = 'font-size:11px;color:#888;padding:5px 12px;background:#f8f9fb;';
+  const TV = 'font-size:11px;font-weight:600;color:#1a1a2e;padding:5px 12px;background:#f8f9fb';
+
+  // Righe riferimenti
+  let rifRows =
+    '<tr style="'+RS+'"><td style="'+TD+'width:44%">Stato</td><td style="'+TV+'">'+statoLabel+'</td></tr>'+
+    '<tr style="'+RS+'"><td style="'+TD+'">Data intervento</td><td style="'+TV+'">'+fmtD(intervento.data)+'</td></tr>';
+  if(intervento.rapportino_num) rifRows+='<tr style="'+RS+'"><td style="'+TD+'">Rapportino N.</td><td style="'+TV+'">'+intervento.rapportino_num+(intervento.rapportino_data?' del '+fmtD(intervento.rapportino_data):'')+'</td></tr>';
+  if(intervento.offerta_num)    rifRows+='<tr style="'+RS+'"><td style="'+TD+'">Ns. Offerta N.</td><td style="'+TV+'">'+intervento.offerta_num+'</td></tr>';
+  if(intervento.ordine_num)     rifRows+='<tr><td style="'+TD+'">Ordine Cliente N.</td><td style="'+TV+'">'+intervento.ordine_num+(intervento.ordine_data?' del '+fmtD(intervento.ordine_data):'')+'</td></tr>';
+
+  // Righe cliente
+  let cliRows = '';
+  cliRows += '<tr style="'+RS+'"><td style="'+TD+'width:38%">Ragione sociale</td><td style="'+TV+'"><b>'+clNome+'</b></td></tr>';
+  if(cl&&cl.indirizzo_completo) cliRows+='<tr style="'+RS+'"><td style="'+TD+'">Indirizzo</td><td style="'+TV+'">'+cl.indirizzo_completo+'</td></tr>';
+  if(cl&&cl.ref)   cliRows+='<tr style="'+RS+'"><td style="'+TD+'">Referente</td><td style="'+TV+'">'+cl.ref+'</td></tr>';
+  if(cl&&cl.tel)   cliRows+='<tr style="'+RS+'"><td style="'+TD+'">Telefono</td><td style="'+TV+'">'+cl.tel+'</td></tr>';
+  if(cl&&cl.email) cliRows+='<tr style="'+RS+'"><td style="'+TD+'">Email</td><td style="'+TV+'">'+cl.email+'</td></tr>';
+  if(cl&&cl.piva)  cliRows+='<tr style="'+RS+'"><td style="'+TD+'">P.IVA</td><td style="'+TV+'">'+cl.piva+'</td></tr>';
+  if(cl&&cl.citta) cliRows+='<tr><td style="'+TD+'">Città</td><td style="'+TV+'">'+cl.citta+'</td></tr>';
+
+  let html = '<div style="font-family:Arial,Helvetica,sans-serif;color:#1a1a2e;font-size:13px">';
+
+  // INTESTAZIONE — tabella invece di flex
+  html += '<table width="100%" cellpadding="0" cellspacing="0" style="background:#1a3a6e;border-collapse:collapse">';
+  html += '<tr>';
+  html += '<td style="padding:18px 28px 14px;color:#fff">';
+  html += '<div style="font-size:22px;font-weight:800">Tekno<span style="font-weight:400">Automazione</span></div>';
+  html += '<div style="font-size:10px;opacity:.7;letter-spacing:2px;text-transform:uppercase;margin-top:2px">Rapporto Intervento Tecnico</div>';
+  html += '</td>';
+  html += '<td align="right" style="padding:18px 28px 14px;color:#fff;font-size:11px;vertical-align:top;opacity:.85">';
+  html += '<div>Data: '+fmtD(intervento.data)+'</div>';
+  html += '<div style="margin-top:2px">Intervento #'+intervento.id+'</div>';
+  html += '</td>';
+  html += '</tr></table>';
+
+  // TITOLO
+  html += '<div style="background:#eef3fb;padding:12px 28px;border-bottom:3px solid #1a3a6e">';
+  html += '<div style="font-size:15px;font-weight:700;color:#1a3a6e">'+(intervento.titolo||'—')+'</div>';
+  if(intervento.indirizzo) html += '<div style="font-size:10px;color:#555;margin-top:2px">&#128205; '+intervento.indirizzo+'</div>';
+  html += '</div>';
+
+  html += '<div style="padding:16px 28px">';
+
+  // RIFERIMENTI + CLIENTE — tabella a due celle invece di flex
+  html += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:14px;border-collapse:collapse">';
+  html += '<tr valign="top">';
+  // Cella sinistra: Riferimenti
+  html += '<td style="width:50%;padding-right:6px">';
+  html += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #dde3ee">';
+  html += '<tr><td colspan="2" style="'+HS+'">Riferimenti documento</td></tr>';
+  html += rifRows;
+  html += '</table></td>';
+  // Cella destra: Cliente
+  html += '<td style="width:50%;padding-left:6px">';
+  html += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #dde3ee">';
+  html += '<tr><td colspan="2" style="'+HS+'">Dati cliente</td></tr>';
+  html += cliRows;
+  html += '</table></td>';
+  html += '</tr></table>';
+
+  // ORE LAVORO
+  html += '<div style="margin-bottom:14px">';
+  html += '<div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#1a3a6e;margin-bottom:6px">Dettaglio ore lavoro</div>';
+  html += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #dde3ee">';
+  html += '<tr style="background:#1a3a6e;color:#fff">';
+  html += '<th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:600;width:4%">#</th>';
+  html += '<th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:600;width:18%">Data</th>';
+  html += '<th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:600;width:14%">Dalle</th>';
+  html += '<th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:600;width:14%">Alle</th>';
+  html += '<th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:600;width:14%">Pausa</th>';
+  html += '<th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:600">Ore nette</th>';
+  html += '</tr>';
+  html += '<tbody style="background:#fff">'+oreRows+'</tbody>';
+  html += '<tr style="background:#eef3fb;border-top:2px solid #1a3a6e">';
+  html += '<td colspan="5" align="right" style="padding:7px 8px;font-size:11px;font-weight:700;color:#1a3a6e">TOTALE ORE LAVORO</td>';
+  html += '<td style="padding:7px 8px;font-size:13px;font-weight:800;color:#1a3a6e">'+formatOre(parseFloat(intervento.ore_totali||0))+'</td>';
+  html += '</tr></table></div>';
+
+  // ORE VIAGGIO + KM
+  const viaggioEntries = intervento.ore_viaggio_entries || [];
+  const viaggioRows = viaggioEntries.map((e,idx)=>{
+    const ore = calcolaOreDaEntry(e);
+    return `<tr style="border-bottom:1px solid #eee"><td style="padding:5px 8px;font-size:11px">${idx+1}</td><td style="padding:5px 8px;font-size:11px">${e.data?fmtD(e.data):''}</td><td style="padding:5px 8px;font-size:11px">${e.dalle||'—'}</td><td style="padding:5px 8px;font-size:11px">${e.alle||'—'}</td><td style="padding:5px 8px;font-size:11px">${e.pausa||0} min</td><td style="padding:5px 8px;font-size:11px;font-weight:700">${formatOre(ore)}</td></tr>`;
+  }).join('');
+  html += '<div style="margin-bottom:14px">';
+  html += '<div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#8b3a00;margin-bottom:6px">Ore viaggio &amp; Chilometri</div>';
+  html += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #dde3ee;margin-bottom:8px">';
+  html += '<tr style="background:#8b3a00;color:#fff"><th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:600;width:4%">#</th><th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:600;width:18%">Data</th><th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:600;width:14%">Dalle</th><th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:600;width:14%">Alle</th><th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:600;width:14%">Pausa</th><th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:600">Ore viaggio</th></tr>';
+  html += '<tbody style="background:#fff">'+(viaggioRows||'<tr><td colspan="6" style="padding:8px;text-align:center;font-size:11px;color:#999">Nessuna ora di viaggio</td></tr>')+'</tbody>';
+  html += '<tr style="background:#fff3ee;border-top:2px solid #8b3a00"><td colspan="5" align="right" style="padding:7px 8px;font-size:11px;font-weight:700;color:#8b3a00">TOTALE ORE VIAGGIO</td><td style="padding:7px 8px;font-size:13px;font-weight:800;color:#8b3a00">'+formatOre(parseFloat(intervento.ore_viaggio_totali||0))+'</td></tr>';
+  html += '</table>';
+  html += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #dde3ee"><tr style="background:#1a5e6e;color:#fff"><td style="padding:8px 12px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase">KM TOTALI</td><td style="padding:8px 12px;font-size:14px;font-weight:800;text-align:right">'+(parseFloat(intervento.km_totali||0))+' km</td></tr></table>';
+  html += '</div>';
+
+  // DESCRIZIONE
+  html += '<div style="margin-bottom:14px">';
+  html += '<div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#1a3a6e;margin-bottom:6px">Descrizione lavori</div>';
+  html += '<div style="background:#f8f9fb;border:1px solid #dde3ee;padding:12px 14px;font-size:11px;line-height:1.7;min-height:60px;color:#333">'+(intervento.descrizione||'')+'</div>';
+  html += '</div>';
+
+  // FIRME — tabella a due celle invece di flex
+  html += '<div>';
+  html += '<div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#1a3a6e;margin-bottom:8px">Firme di accettazione</div>';
+  html += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">';
+  html += '<tr valign="top">';
+  // Firma Tecnico
+  html += '<td style="width:50%;padding-right:6px">';
+  html += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #dde3ee">';
+  html += '<tr><td style="'+HS+'">Tecnico esecutore</td></tr>';
+  html += '<tr><td style="padding:10px 14px;background:#f8f9fb;height:100px">';
+  html += sigTecnico;
+  html += '<div style="font-size:10px;color:#555;margin-top:6px">Nome: ___________________________</div>';
+  html += '<div style="font-size:10px;color:#555;margin-top:3px">Data: '+fmtD(intervento.data)+'</div>';
+  html += '</td></tr></table></td>';
+  // Firma Cliente
+  html += '<td style="width:50%;padding-left:6px">';
+  html += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #dde3ee">';
+  html += '<tr><td style="'+HS+'">Cliente &mdash; Accettazione lavori</td></tr>';
+  html += '<tr><td style="padding:10px 14px;background:#f8f9fb;height:100px">';
+  html += sigCliente;
+  html += '<div style="font-size:10px;color:#555;margin-top:6px">Nome: ___________________________</div>';
+  html += '<div style="font-size:10px;color:#555;margin-top:3px">Data: '+fmtD(intervento.data)+'</div>';
+  html += '</td></tr></table></td>';
+  html += '</tr></table></div>';
+
+  html += '</div>';
+
+  // FOOTER — tabella invece di flex
+  html += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;background:#f0f2f7;border-top:1px solid #dde3ee;margin-top:12px">';
+  html += '<tr>';
+  html += '<td style="padding:7px 28px;font-size:10px;color:#888">Tekno Automazione &mdash; Documento generato il '+new Date().toLocaleDateString('it-IT')+'</td>';
+  html += '<td align="right" style="padding:7px 28px;font-size:10px;color:#888">Intervento #'+intervento.id+'</td>';
+  html += '</tr></table>';
+
+  html += '</div>';
+
+  html2pdf().set({
+    margin: 0,
+    filename: 'intervento_' + nomePulito + '_' + dataFile + '.pdf',
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true, allowTaint: true, logging: false },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  }).from(html).save();
+  showToast('PDF generato!');
+}
 
 
 // ─── MOBILE MENU ─────────────────────────────────────────────────────────────
