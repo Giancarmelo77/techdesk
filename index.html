@@ -398,8 +398,8 @@
 
 <script>
 
-/ ─── EMULATORE LOCALSTORAGE PER TEST LOCALE ──────────────────────────────────
-const IS_LOCAL_MODE = true; // Imposta a false per tornare a usare Google Sheets
+// ─── EMULATORE LOCALSTORAGE PER TEST LOCALE ──────────────────────────────────
+const IS_LOCAL_MODE = false; // Imposta a true solo per test locale senza Google Sheets
 
 if (IS_LOCAL_MODE) {
   console.warn("⚠️ MODALITÀ LOCALE ATTIVA: I dati verranno salvati nel browser.");
@@ -412,16 +412,24 @@ if (IS_LOCAL_MODE) {
       setToken: () => {},
       getToken: () => ({ access_token: 'local-token' }),
       sheets: { spreadsheets: { 
-        get: () => Promise.resolve({ result: { sheets: [{ properties: { title: 'Interventi' } }] } }),
+        get: () => Promise.resolve({ result: { sheets: [{ properties: { title: 'Interventi', sheetId: 0 } }] } }),
+        batchUpdate: () => Promise.resolve(),
         values: {
           get: ({ range }) => {
-            const key = range.split('!')[0]; // Prende 'Interventi' o 'Clienti'
-            const data = JSON.parse(localStorage.getItem('td_' + key)) || [];
+            const key = range.split('!')[0];
+            const data = JSON.parse(localStorage.getItem('td_' + key) || '[]');
             return Promise.resolve({ result: { values: data } });
           },
           update: ({ range, resource }) => {
             const key = range.split('!')[0];
             localStorage.setItem('td_' + key, JSON.stringify(resource.values));
+            return Promise.resolve();
+          },
+          append: ({ range, resource }) => {
+            const key = range.split('!')[0];
+            const existing = JSON.parse(localStorage.getItem('td_' + key) || '[]');
+            const newRows = [...existing, ...(resource.values || [])];
+            localStorage.setItem('td_' + key, JSON.stringify(newRows));
             return Promise.resolve();
           }
         }
