@@ -587,7 +587,7 @@ async function ensureSheets() {
 }
 
 async function writeHeadersIfEmpty() {
-  const intH = [['ID','Titolo','Cliente','Stato','Data','Indirizzo','Descrizione','OreEntries','OreTotali','RapportinoNum','RapportinoData','OffertaNum','OrdineNum','OrdineData','FatturaNum','FatturaData','Importo','StatoFattura','Files','OreViaggioEntries','OreViaggioTotali','KmTotali']];
+  const intH = [['ID','Titolo','Cliente','Stato','Data','Indirizzo','Descrizione','OreEntries','OreTotali','RapportinoNum','RapportinoData','OffertaNum','OrdineNum','OrdineData','FatturaNum','FatturaData','Importo','StatoFattura','Files','OreViaggioEntries','OreViaggioTotali','KmTotali','FirmaTecnicoUrl','FirmaClienteUrl']];
   const cliH = [['ID','Nome','Referente','Telefono','Email','Città','P.IVA','Indirizzo']];
   try {
     const r1 = await gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Interventi!A1' });
@@ -625,7 +625,7 @@ async function syncAll() {
   try {
     await refreshTokenIfNeeded();
     const [r1, r2] = await Promise.all([
-      gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Interventi!A2:V' }),
+      gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Interventi!A2:X' }),
       gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Clienti!A2:H' }),
     ]);
     interventi = (r1.result.values || []).map(r => ({
@@ -638,7 +638,8 @@ async function syncAll() {
       importo: r[16]||'', stato_fattura: r[17]||'',
       files: safeJSON(r[18], []),
       ore_viaggio_entries: safeJSON(r[19], []), ore_viaggio_totali: r[20]||'0',
-      km_totali: r[21]||'0'
+      km_totali: r[21]||'0',
+      firma_tecnico_url: r[22]||'', firma_cliente_url: r[23]||''
     })).filter(i => i.id);
     clienti = (r2.result.values || []).map(r => ({
       id: r[0]||'', nome: r[1]||'', ref: r[2]||'', tel: r[3]||'', email: r[4]||'', citta: r[5]||'', piva: r[6]||'', indirizzo_completo: r[7]||''
@@ -713,7 +714,12 @@ function interventoToRow(id, d) {
     d.rapportino_num||'', d.rapportino_data||'', d.offerta_num||'', d.ordine_num||'', d.ordine_data||'',
     d.fattura_num||'', d.fattura_data||'', d.importo||'', d.stato_fattura||'',
     JSON.stringify(d.files||[]),
-    JSON.stringify(d.ore_viaggio_entries||[]), d.ore_viaggio_totali||'0', d.km_totali||'0'];
+    JSON.stringify(d.ore_viaggio_entries||[]), d.ore_viaggio_totali||'0', d.km_totali||'0',
+    d.firma_tecnico_url||'', d.firma_cliente_url||''];
+}
+async function saveInterventoToSheet(d) {
+  const row = interventoToRow(d.id, d);
+  await updateSheetRow('Interventi', d.id, row, 'X');
 }
 function clienteToRow(id, d) {
   return [id, d.nome, d.ref||'', d.tel||'', d.email||'', d.citta||'', d.piva||'', d.indirizzo_completo||''];
@@ -1072,7 +1078,7 @@ async function saveIntervento() {
     await refreshTokenIfNeeded();
     const id=editingId||genId('I');
     const row=interventoToRow(id,d);
-    if(editingId) await updateSheetRow('Interventi',editingId,row,'V');
+    if(editingId) await updateSheetRow('Interventi',editingId,row,'X');
     else await appendRow('Interventi',row);
     await syncAll();
     modalDirty = false;
@@ -1131,7 +1137,9 @@ function openDetail(id) {
   document.getElementById('pdf_intervento_btn').style.display='';
   document.getElementById('edit_intervento_btn').onclick=()=>{closeModal('modal-detail');openEditIntervento(id);};
   document.getElementById('delete_intervento_btn').onclick=()=>deleteIntervento(id);
-  document.getElementById('pdf_intervento_btn').onclick=()=>openSignatureModal(i);
+  document.getElementById('pdf_intervento_btn').onclick=()=>{
+    loadSignaturesForIntervento(i).then(()=>openSignatureModal(i));
+  };
   document.getElementById('modal-detail').classList.add('open');
 }
 
@@ -1388,47 +1396,122 @@ let activeCanvas = null;
 let isDrawing = false;
 let lastX = 0, lastY = 0;
 
-function openSignatureModal(intervento) {
+// Carica le firme salvate su Drive per questo intervento
+async function loadSignaturesForIntervento(intervento) {
   pdfSignatures = { tecnico: null, cliente: null };
+  const load = async (url) => {
+    if (!url) return null;
+    try {
+      // Le firme sono salvate come PNG su Drive; le recuperiamo come base64
+      const token = gapi.client.getToken()?.access_token;
+      // Estrae il fileId dal webViewLink di Drive
+      const match = url.match(/\/d\/([^/]+)\//)||url.match(/id=([^&]+)/);
+      if (!match) return null;
+      const fileId = match[1];
+      const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      return await new Promise(r => { const fr = new FileReader(); fr.onload = e => r(e.target.result); fr.readAsDataURL(blob); });
+    } catch { return null; }
+  };
+  pdfSignatures.tecnico = await load(intervento.firma_tecnico_url);
+  pdfSignatures.cliente = await load(intervento.firma_cliente_url);
+}
+
+async function uploadSignatureToDrive(dataUrl, name) {
+  const token = gapi.client.getToken().access_token;
+  const base64 = dataUrl.split(',')[1];
+  const metadata = { name, parents: driveFolderId ? [driveFolderId] : [] };
+  const boundary = '-------TeknoFirma';
+  const body = `--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: image/png\r\nContent-Transfer-Encoding: base64\r\n\r\n${base64}\r\n--${boundary}--`;
+  const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': `multipart/related; boundary=${boundary}` },
+    body
+  });
+  const data = await res.json();
+  // Rendi pubblica in lettura
+  await fetch(`https://www.googleapis.com/drive/v3/files/${data.id}/permissions`, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role: 'reader', type: 'anyone' })
+  });
+  return data.webViewLink;
+}
+
+function openSignatureModal(intervento) {
   const sigModal = document.getElementById('modal-signature');
   if (!sigModal) {
-    // crea modal firma al volo
     const m = document.createElement('div');
     m.id = 'modal-signature';
     m.className = 'overlay';
     m.innerHTML = `
-      <div class="modal" style="max-width:520px">
+      <div class="modal" style="max-width:540px">
         <div class="modal-header">
           <div class="modal-title">✍️ Firme digitali</div>
           <button class="modal-close" onclick="closeModal('modal-signature')">×</button>
         </div>
         <div class="modal-body">
           <div style="margin-bottom:20px">
-            <div class="form-label" style="margin-bottom:8px">Firma Tecnico</div>
-            <canvas id="canvas-tecnico" width="460" height="120"
+            <div class="form-label" style="margin-bottom:6px">Firma Tecnico</div>
+            <div id="firma-tecnico-preview" style="display:none;margin-bottom:6px">
+              <img id="img-firma-tecnico" style="height:60px;border:1px solid var(--border);border-radius:6px;background:#fff;padding:4px">
+              <button onclick="clearSavedFirma('tecnico')" class="btn btn-danger btn-sm" style="margin-left:8px">🗑 Rifai</button>
+            </div>
+            <canvas id="canvas-tecnico" width="480" height="120"
               style="border:1.5px solid var(--border);border-radius:8px;background:#fff;width:100%;touch-action:none;cursor:crosshair"></canvas>
             <button onclick="clearCanvas('tecnico')" class="btn btn-secondary btn-sm" style="margin-top:6px">🗑 Cancella</button>
           </div>
           <div>
-            <div class="form-label" style="margin-bottom:8px">Firma Cliente</div>
-            <canvas id="canvas-cliente" width="460" height="120"
+            <div class="form-label" style="margin-bottom:6px">Firma Cliente</div>
+            <div id="firma-cliente-preview" style="display:none;margin-bottom:6px">
+              <img id="img-firma-cliente" style="height:60px;border:1px solid var(--border);border-radius:6px;background:#fff;padding:4px">
+              <button onclick="clearSavedFirma('cliente')" class="btn btn-danger btn-sm" style="margin-left:8px">🗑 Rifai</button>
+            </div>
+            <canvas id="canvas-cliente" width="480" height="120"
               style="border:1.5px solid var(--border);border-radius:8px;background:#fff;width:100%;touch-action:none;cursor:crosshair"></canvas>
             <button onclick="clearCanvas('cliente')" class="btn btn-secondary btn-sm" style="margin-top:6px">🗑 Cancella</button>
           </div>
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" onclick="closeModal('modal-signature')">Annulla</button>
-          <button class="btn btn-primary" onclick="confirmSignaturesAndPrint()">📄 Genera PDF</button>
+          <button class="btn btn-primary" onclick="confirmSignaturesAndPrint()">📄 Salva firme e Genera PDF</button>
         </div>
       </div>`;
     document.body.appendChild(m);
   }
   document.getElementById('modal-signature').classList.add('open');
-  setTimeout(() => {
-    setupCanvas('tecnico');
-    setupCanvas('cliente');
-  }, 100);
   window._pendingPdfIntervento = intervento;
+
+  // Mostra firme già salvate se presenti
+  ['tecnico','cliente'].forEach(tipo => {
+    const url = tipo === 'tecnico' ? intervento.firma_tecnico_url : intervento.firma_cliente_url;
+    const preview = document.getElementById('firma-'+tipo+'-preview');
+    const canvas  = document.getElementById('canvas-'+tipo);
+    if (url && pdfSignatures[tipo]) {
+      document.getElementById('img-firma-'+tipo).src = pdfSignatures[tipo];
+      preview.style.display = 'flex';
+      preview.style.alignItems = 'center';
+      canvas.style.display = 'none';
+      document.querySelector(`button[onclick="clearCanvas('${tipo}')"]`).style.display = 'none';
+    } else {
+      preview.style.display = 'none';
+      canvas.style.display = 'block';
+      setTimeout(() => setupCanvas(tipo), 100);
+    }
+  });
+}
+
+function clearSavedFirma(tipo) {
+  pdfSignatures[tipo] = null;
+  document.getElementById('firma-'+tipo+'-preview').style.display = 'none';
+  const canvas = document.getElementById('canvas-'+tipo);
+  canvas.style.display = 'block';
+  const btn = canvas.nextElementSibling;
+  if (btn) btn.style.display = '';
+  setupCanvas(tipo);
 }
 
 function setupCanvas(id) {
@@ -1472,23 +1555,45 @@ function setupCanvas(id) {
 function clearCanvas(id) {
   const canvas = document.getElementById('canvas-' + id);
   if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
 }
 
 function isCanvasBlank(canvas) {
-  const ctx = canvas.getContext('2d');
-  const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-  return !data.some(v => v !== 0);
+  return !canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data.some(v => v !== 0);
 }
 
-function confirmSignaturesAndPrint() {
-  const cTec = document.getElementById('canvas-tecnico');
-  const cCli = document.getElementById('canvas-cliente');
-  pdfSignatures.tecnico = isCanvasBlank(cTec) ? null : cTec.toDataURL('image/png');
-  pdfSignatures.cliente = isCanvasBlank(cCli) ? null : cCli.toDataURL('image/png');
+async function confirmSignaturesAndPrint() {
+  const intervento = window._pendingPdfIntervento;
+  showToast('Salvataggio firme in corso…');
+
+  const salvaFirma = async (tipo) => {
+    // Se già salvata (preview visibile) usa quella in memoria
+    if (pdfSignatures[tipo]) return pdfSignatures[tipo];
+    const canvas = document.getElementById('canvas-'+tipo);
+    if (!canvas || canvas.style.display === 'none' || isCanvasBlank(canvas)) return null;
+    const dataUrl = canvas.toDataURL('image/png');
+    pdfSignatures[tipo] = dataUrl;
+    // Carica su Drive e salva il link nello sheet
+    try {
+      const nomeFile = `firma_${tipo}_${intervento.id}_${Date.now()}.png`;
+      const url = await uploadSignatureToDrive(dataUrl, nomeFile);
+      // Aggiorna l'intervento in memoria e su Sheet
+      intervento['firma_'+tipo+'_url'] = url;
+      const idx = interventi.findIndex(x => x.id === intervento.id);
+      if (idx !== -1) {
+        interventi[idx]['firma_'+tipo+'_url'] = url;
+        await saveInterventoToSheet(interventi[idx]);
+      }
+    } catch(e) { console.error('Upload firma:', e); }
+    return dataUrl;
+  };
+
+  await salvaFirma('tecnico');
+  await salvaFirma('cliente');
+
   closeModal('modal-signature');
-  exportToPDF(window._pendingPdfIntervento);
+  showToast('Firme salvate! Generazione PDF…');
+  exportToPDF(intervento);
 }
 
 function exportToPDF(intervento) {
@@ -1501,12 +1606,13 @@ function exportToPDF(intervento) {
   const dataFile   = fmtD(intervento.data).replace(/\//g,'-');
 
   // ─── Costanti layout ─────────────────────────────────────────────────────────
-  // A4 a scale:2 → larghezza utile con padding 22px × 2 = 796px
-  // Due box 340px + gap 10px = 690px → centrati nei 796px con margine naturale
-  const BOX_W  = '340px';   // ~90mm
-  const BOX_H  = '152px';   // ~40mm
+  // A4 @96dpi = 794px. Padding laterale simmetrico 22px per lato → area utile = 750px
+  // Due box 340px + gap 10px = 690px, centrati con auto margin
+  const BOX_W  = '340px';
+  const BOX_H  = '152px';
   const BOX_GAP = '10px';
-  const FULL_W  = '690px';  // larghezza totale sezioni sotto (340+10+340)
+  const FULL_W  = '690px';   // larghezza di tutte le sezioni del corpo
+  const PAD_LR  = '52px';    // padding laterale della pagina: (794-690)/2 = 52px → simmetrico
 
   // ─── Stili ───────────────────────────────────────────────────────────────────
   const HS_BLUE  = 'background:#1a3a6e;color:#fff;padding:5px 10px;font-size:8.5px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase';
@@ -1615,44 +1721,47 @@ function exportToPDF(intervento) {
   // ─── Composizione HTML ────────────────────────────────────────────────────────
   let html = '<div style="font-family:Arial,Helvetica,sans-serif;color:#1a1a2e;font-size:11px">';
 
-  // INTESTAZIONE
+  // INTESTAZIONE — logo sinistra, dati aziendali destra
   html += `<table width="100%" cellpadding="0" cellspacing="0" style="background:#1a3a6e;border-collapse:collapse">
     <tr>
-      <td style="padding:14px 22px 11px;color:#fff">
+      <td style="padding:14px ${PAD_LR} 11px;color:#fff">
         <div style="font-size:19px;font-weight:800">Tekno<span style="font-weight:400">Automazione</span></div>
         <div style="font-size:8.5px;opacity:.7;letter-spacing:2px;text-transform:uppercase;margin-top:2px">Rapporto Intervento Tecnico</div>
       </td>
-      <td align="right" style="padding:14px 22px 11px;color:#fff;font-size:9.5px;vertical-align:top;opacity:.85">
-        <div>Data: ${fmtD(intervento.data)}</div>
-        <div style="margin-top:2px">Intervento #${intervento.id}</div>
+      <td align="right" style="padding:14px ${PAD_LR} 11px;color:#fff;font-size:8.5px;vertical-align:top;line-height:1.7;opacity:.92">
+        <div style="font-weight:700;font-size:9px">TEKNO AUTOMAZIONE di Tarantini Giancarmelo</div>
+        <div>Via I° Maggio, 37/A - 73019 – Trepuzzi (LE)</div>
+        <div>teknoautomazione@gmail.com</div>
+        <div>P.IVA 04584090759</div>
       </td>
     </tr>
   </table>`;
 
   // TITOLO
-  html += `<div style="background:#eef3fb;padding:9px 22px;border-bottom:3px solid #1a3a6e">
+  html += `<div style="background:#eef3fb;padding:9px ${PAD_LR};border-bottom:3px solid #1a3a6e">
     <div style="font-size:13px;font-weight:700;color:#1a3a6e">${intervento.titolo||'—'}</div>
     ${intervento.indirizzo?`<div style="font-size:8.5px;color:#555;margin-top:2px">&#128205; ${intervento.indirizzo}</div>`:''}
   </div>`;
 
-  html += '<div style="padding:12px 22px">';
+  // CORPO — centrato con padding simmetrico
+  html += `<div style="padding:12px ${PAD_LR}">`;
 
-  // RIGA 1 — Riferimenti + Cliente (due box 340×152 affiancati)
+  // RIGA 1 — Riferimenti + Cliente
   html += `<div style="width:${FULL_W};margin-bottom:11px;white-space:nowrap">
     ${rifBlock}${cliBlock}
   </div>`;
 
-  // RIGA 2 — Dettaglio ore lavoro (larghezza = FULL_W, allineata ai box)
+  // RIGA 2 — Ore lavoro
   html += `<div style="width:${FULL_W};margin-bottom:11px">
     <div style="${HS_BLUE};border-radius:3px 3px 0 0">Dettaglio ore lavoro</div>
-    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1.5px solid #1a3a6e;border-top:none">
-      <tr style="background:#dde8f7">
-        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#1a3a6e;width:4%">#</th>
-        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#1a3a6e;width:19%">Data</th>
-        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#1a3a6e;width:14%">Dalle</th>
-        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#1a3a6e;width:14%">Alle</th>
-        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#1a3a6e;width:15%">Pausa</th>
-        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#1a3a6e">Ore nette</th>
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1.5px solid #1a3a6e;border-top:none;table-layout:fixed">
+      <tr style="background:#fff;border-bottom:1px solid #dde3ee">
+        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#1a3a6e;width:4%;font-weight:700">#</th>
+        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#1a3a6e;width:22%;font-weight:700">Data</th>
+        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#1a3a6e;width:16%;font-weight:700">Dalle</th>
+        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#1a3a6e;width:16%;font-weight:700">Alle</th>
+        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#1a3a6e;width:18%;font-weight:700">Pausa</th>
+        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#1a3a6e;font-weight:700">Ore nette</th>
       </tr>
       <tbody style="background:#fff">${oreRows}</tbody>
       <tr style="background:#eef3fb;border-top:1.5px solid #1a3a6e">
@@ -1662,17 +1771,17 @@ function exportToPDF(intervento) {
     </table>
   </div>`;
 
-  // RIGA 3 — Ore viaggio + km (stessa larghezza FULL_W)
+  // RIGA 3 — Ore viaggio
   html += `<div style="width:${FULL_W};margin-bottom:11px">
     <div style="${HS_BROWN};border-radius:3px 3px 0 0">Ore viaggio &amp; Chilometri</div>
-    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1.5px solid #7a3200;border-top:none">
-      <tr style="background:#f5e5d8">
-        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#7a3200;width:4%">#</th>
-        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#7a3200;width:19%">Data</th>
-        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#7a3200;width:14%">Dalle</th>
-        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#7a3200;width:14%">Alle</th>
-        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#7a3200;width:15%">Km</th>
-        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#7a3200">Ore viaggio</th>
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1.5px solid #7a3200;border-top:none;table-layout:fixed">
+      <tr style="background:#fff;border-bottom:1px solid #f5e5d8">
+        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#7a3200;width:4%;font-weight:700">#</th>
+        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#7a3200;width:22%;font-weight:700">Data</th>
+        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#7a3200;width:16%;font-weight:700">Dalle</th>
+        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#7a3200;width:16%;font-weight:700">Alle</th>
+        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#7a3200;width:18%;font-weight:700">Km</th>
+        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#7a3200;font-weight:700">Ore viaggio</th>
       </tr>
       <tbody style="background:#fff">${viaggioRows}</tbody>
       <tr style="background:#fff3ee;border-top:1.5px solid #7a3200">
@@ -1683,13 +1792,13 @@ function exportToPDF(intervento) {
     </table>
   </div>`;
 
-  // RIGA 4 — Descrizione (stessa larghezza FULL_W)
+  // RIGA 4 — Descrizione
   html += `<div style="width:${FULL_W};margin-bottom:11px">
     <div style="${HS_BLUE};border-radius:3px 3px 0 0">Descrizione lavori</div>
-    <div style="background:#f8f9fb;border:1.5px solid #1a3a6e;border-top:none;padding:9px 11px;font-size:9.5px;line-height:1.65;min-height:44px;color:#333">${intervento.descrizione||''}</div>
+    <div style="background:#f8f9fb;border:1.5px solid #1a3a6e;border-top:none;padding:9px 11px;font-size:9.5px;line-height:1.65;min-height:44px;color:#333;white-space:pre-wrap">${intervento.descrizione||''}</div>
   </div>`;
 
-  // RIGA 5 — Firme (due box 340×152, stesso schema riferimenti/cliente)
+  // RIGA 5 — Firme
   html += `<div style="width:${FULL_W};white-space:nowrap">
     <div style="font-size:8.5px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#1a3a6e;margin-bottom:6px;white-space:normal">Firme di accettazione</div>
     ${firmaBox('Tecnico esecutore', sigTecnico, false)}
@@ -1701,8 +1810,8 @@ function exportToPDF(intervento) {
   // FOOTER
   html += `<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;background:#f0f2f7;border-top:1px solid #dde3ee;margin-top:10px">
     <tr>
-      <td style="padding:5px 22px;font-size:8.5px;color:#888">Tekno Automazione &mdash; Documento generato il ${new Date().toLocaleDateString('it-IT')}</td>
-      <td align="right" style="padding:5px 22px;font-size:8.5px;color:#888">Intervento #${intervento.id}</td>
+      <td style="padding:5px ${PAD_LR};font-size:8.5px;color:#888">Tekno Automazione &mdash; Documento generato il ${new Date().toLocaleDateString('it-IT')}</td>
+      <td align="right" style="padding:5px ${PAD_LR};font-size:8.5px;color:#888">Intervento #${intervento.id}</td>
     </tr>
   </table>`;
 
