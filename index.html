@@ -1492,177 +1492,219 @@ function confirmSignaturesAndPrint() {
 }
 
 function exportToPDF(intervento) {
-  const cl=getClient(intervento.cliente);
-  function fmtD(iso){if(!iso)return'—';const p=iso.split('-');return p.length!==3?iso:`${p[2]}/${p[1]}/${p[0]}`;}
-  const statoLabel={'aperto':'Aperto','in-corso':'In Corso','attesa-ordine':'Attesa Ordine','chiuso':'Chiuso'}[intervento.stato]||intervento.stato||'—';
+  const cl = getClient(intervento.cliente);
+  function fmtD(iso) { if(!iso) return '—'; const p=iso.split('-'); return p.length!==3?iso:`${p[2]}/${p[1]}/${p[0]}`; }
 
-  const clNome = cl ? cl.nome : '—';
+  const statoLabel = {'aperto':'Aperto','in-corso':'In Corso','attesa-ordine':'Attesa Ordine','chiuso':'Chiuso'}[intervento.stato]||intervento.stato||'—';
+  const clNome     = cl ? cl.nome : '—';
   const nomePulito = clNome.replace(/[^a-zA-Z0-9\s]/g,'').replace(/\s+/g,'_').substring(0,30);
-  const dataFile = fmtD(intervento.data).replace(/\//g,'-');
+  const dataFile   = fmtD(intervento.data).replace(/\//g,'-');
 
-  let oreRows='';
-  if(intervento.ore_entries&&intervento.ore_entries.length){
-    oreRows=intervento.ore_entries.map((e,idx)=>
-      '<tr style="border-bottom:1px solid #e5e7eb">' +
-      '<td style="padding:5px 8px;font-size:11px">'+(idx+1)+'</td>' +
-      '<td style="padding:5px 8px;font-size:11px">'+(e.data?fmtDataIT(e.data):'')+'</td>' +
-      '<td style="padding:5px 8px;font-size:11px">'+(e.dalle||'—')+'</td>' +
-      '<td style="padding:5px 8px;font-size:11px">'+(e.alle||'—')+'</td>' +
-      '<td style="padding:5px 8px;font-size:11px">'+(e.pausa||0)+' min</td>' +
-      '<td style="padding:5px 8px;font-size:11px;font-weight:600">'+formatOre(calcolaOreDaEntry(e))+'</td>' +
-      '</tr>'
+  // ─── Costanti layout ─────────────────────────────────────────────────────────
+  // A4 a scale:2 → larghezza utile con padding 22px × 2 = 796px
+  // Due box 340px + gap 10px = 690px → centrati nei 796px con margine naturale
+  const BOX_W  = '340px';   // ~90mm
+  const BOX_H  = '152px';   // ~40mm
+  const BOX_GAP = '10px';
+  const FULL_W  = '690px';  // larghezza totale sezioni sotto (340+10+340)
+
+  // ─── Stili ───────────────────────────────────────────────────────────────────
+  const HS_BLUE  = 'background:#1a3a6e;color:#fff;padding:5px 10px;font-size:8.5px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase';
+  const HS_BROWN = 'background:#7a3200;color:#fff;padding:5px 10px;font-size:8.5px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase';
+  const BOX_STYLE = `width:${BOX_W};height:${BOX_H};border:1.5px solid #1a3a6e;border-radius:3px;overflow:hidden;display:inline-block;vertical-align:top;box-sizing:border-box`;
+
+  // ─── Helper righe ─────────────────────────────────────────────────────────────
+  const rRow = (label, val, extra) => {
+    if (!val) return '';
+    const v = extra ? `${val} <span style="color:#999;font-size:8px">${extra}</span>` : val;
+    return `<tr style="border-bottom:1px solid #e8edf5">
+      <td style="font-size:9px;color:#666;padding:3px 8px;background:#f4f6fb;width:105px;white-space:nowrap">${label}</td>
+      <td style="font-size:9px;font-weight:600;color:#1a1a2e;padding:3px 8px;background:#f4f6fb;overflow:hidden;white-space:nowrap">${v}</td>
+    </tr>`;
+  };
+  const cRow = (label, val, bold) => {
+    if (!val) return '';
+    const vs = bold
+      ? `font-size:9.5px;font-weight:700;color:#1a3a6e;padding:3px 8px;background:#f4f6fb;overflow:hidden;white-space:nowrap`
+      : `font-size:9px;font-weight:600;color:#1a1a2e;padding:3px 8px;background:#f4f6fb;overflow:hidden;white-space:nowrap`;
+    return `<tr style="border-bottom:1px solid #e8edf5">
+      <td style="font-size:9px;color:#666;padding:3px 8px;background:#f4f6fb;width:90px;white-space:nowrap">${label}</td>
+      <td style="${vs}">${val}</td>
+    </tr>`;
+  };
+
+  // ─── Box Riferimenti ─────────────────────────────────────────────────────────
+  const rifBlock = `
+    <div style="${BOX_STYLE}">
+      <div style="${HS_BLUE}">Riferimenti documento</div>
+      <table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;table-layout:fixed">
+        ${rRow('Stato',             statoLabel)}
+        ${rRow('Data intervento',   fmtD(intervento.data))}
+        ${rRow('Rapportino N.',     intervento.rapportino_num, intervento.rapportino_data?'del '+fmtD(intervento.rapportino_data):'')}
+        ${rRow('Ns. Offerta N.',    intervento.offerta_num)}
+        ${rRow('Ordine Cliente N.', intervento.ordine_num, intervento.ordine_data?'del '+fmtD(intervento.ordine_data):'')}
+      </table>
+    </div>`;
+
+  // ─── Box Dati Cliente (stesso 340×152) ────────────────────────────────────────
+  const cliBlock = `
+    <div style="${BOX_STYLE};margin-left:${BOX_GAP}">
+      <div style="${HS_BLUE}">Dati cliente</div>
+      <table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;table-layout:fixed">
+        ${cRow('Ragione sociale', clNome, true)}
+        ${cRow('Indirizzo',  cl&&cl.indirizzo_completo ? cl.indirizzo_completo : '')}
+        ${cRow('Referente',  cl&&cl.ref   ? cl.ref   : '')}
+        ${cRow('Telefono',   cl&&cl.tel   ? cl.tel   : '')}
+        ${cRow('Email',      cl&&cl.email ? cl.email : '')}
+        ${cRow('P.IVA',      cl&&cl.piva  ? cl.piva  : '')}
+        ${cRow('Città',      cl&&cl.citta ? cl.citta : '')}
+      </table>
+    </div>`;
+
+  // ─── Righe ore lavoro ─────────────────────────────────────────────────────────
+  let oreRows = '';
+  if (intervento.ore_entries && intervento.ore_entries.length) {
+    oreRows = intervento.ore_entries.map((e,idx) =>
+      `<tr style="border-bottom:1px solid #e5e7eb">
+        <td style="padding:4px 6px;font-size:9px">${idx+1}</td>
+        <td style="padding:4px 6px;font-size:9px">${e.data?fmtD(e.data):''}</td>
+        <td style="padding:4px 6px;font-size:9px">${e.dalle||'—'}</td>
+        <td style="padding:4px 6px;font-size:9px">${e.alle||'—'}</td>
+        <td style="padding:4px 6px;font-size:9px">${e.pausa||0} min</td>
+        <td style="padding:4px 6px;font-size:9px;font-weight:600">${formatOre(calcolaOreDaEntry(e))}</td>
+      </tr>`
     ).join('');
   } else {
-    oreRows='<tr><td colspan="6" style="padding:10px;font-size:11px;color:#888">Nessuna fascia oraria</td></tr>';
+    oreRows = '<tr><td colspan="6" style="padding:8px;font-size:9px;color:#888;text-align:center">Nessuna fascia oraria</td></tr>';
   }
 
+  // ─── Righe ore viaggio ────────────────────────────────────────────────────────
+  const viaggioEntries  = intervento.ore_viaggio_entries || [];
+  const viaggioKmTotale = viaggioEntries.reduce((s,e) => s+(parseFloat(e.km)||0), 0);
+  const viaggioRows = viaggioEntries.length
+    ? viaggioEntries.map((e,idx) =>
+        `<tr style="border-bottom:1px solid #eee">
+          <td style="padding:4px 6px;font-size:9px">${idx+1}</td>
+          <td style="padding:4px 6px;font-size:9px">${e.data?fmtD(e.data):''}</td>
+          <td style="padding:4px 6px;font-size:9px">${e.dalle||'—'}</td>
+          <td style="padding:4px 6px;font-size:9px">${e.alle||'—'}</td>
+          <td style="padding:4px 6px;font-size:9px;font-weight:600">${e.km||0} km</td>
+          <td style="padding:4px 6px;font-size:9px;font-weight:600">${formatOre(calcolaOreDaViaggioEntry(e))}</td>
+        </tr>`
+      ).join('')
+    : '<tr><td colspan="6" style="padding:8px;font-size:9px;color:#888;text-align:center">Nessuna fascia di viaggio</td></tr>';
+
+  // ─── Firme (stesso schema 340×152 per ciascuna) ────────────────────────────────
   const sigTecnico = pdfSignatures.tecnico
-    ? '<img src="'+pdfSignatures.tecnico+'" style="max-width:100%;height:55px;object-fit:contain;display:block;margin:4px 0">'
-    : '<div style="height:55px;border-bottom:1px solid #aaa;margin:4px 0 0"></div>';
+    ? `<img src="${pdfSignatures.tecnico}" style="max-width:100%;height:52px;object-fit:contain;display:block;margin:4px 0">`
+    : '<div style="height:52px;border-bottom:1.5px solid #aaa;margin:4px 0 0"></div>';
   const sigCliente = pdfSignatures.cliente
-    ? '<img src="'+pdfSignatures.cliente+'" style="max-width:100%;height:55px;object-fit:contain;display:block;margin:4px 0">'
-    : '<div style="height:55px;border-bottom:1px solid #aaa;margin:4px 0 0"></div>';
+    ? `<img src="${pdfSignatures.cliente}" style="max-width:100%;height:52px;object-fit:contain;display:block;margin:4px 0">`
+    : '<div style="height:52px;border-bottom:1.5px solid #aaa;margin:4px 0 0"></div>';
 
-  const HS = 'background:#1a3a6e;color:#fff;padding:7px 14px;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase';
-  const RS = 'border-bottom:1px solid #e8edf5';
-  const TD = 'font-size:11px;color:#888;padding:5px 12px;background:#f8f9fb;';
-  const TV = 'font-size:11px;font-weight:600;color:#1a1a2e;padding:5px 12px;background:#f8f9fb';
+  const firmaBox = (titolo, sigImg, hs) => `
+    <div style="${BOX_STYLE}${hs?';margin-left:'+BOX_GAP:''}">
+      <div style="${HS_BLUE}">${titolo}</div>
+      <div style="padding:8px 10px;background:#f8f9fb;height:calc(${BOX_H} - 29px);box-sizing:border-box">
+        ${sigImg}
+        <div style="font-size:8.5px;color:#555;margin-top:5px">Nome: _______________________</div>
+        <div style="font-size:8.5px;color:#555;margin-top:3px">Data: ${fmtD(intervento.data)}</div>
+      </div>
+    </div>`;
 
-  // Righe riferimenti
-  let rifRows =
-    '<tr style="'+RS+'"><td style="'+TD+'width:44%">Stato</td><td style="'+TV+'">'+statoLabel+'</td></tr>'+
-    '<tr style="'+RS+'"><td style="'+TD+'">Data intervento</td><td style="'+TV+'">'+fmtD(intervento.data)+'</td></tr>';
-  if(intervento.rapportino_num) rifRows+='<tr style="'+RS+'"><td style="'+TD+'">Rapportino N.</td><td style="'+TV+'">'+intervento.rapportino_num+(intervento.rapportino_data?' del '+fmtD(intervento.rapportino_data):'')+'</td></tr>';
-  if(intervento.offerta_num)    rifRows+='<tr style="'+RS+'"><td style="'+TD+'">Ns. Offerta N.</td><td style="'+TV+'">'+intervento.offerta_num+'</td></tr>';
-  if(intervento.ordine_num)     rifRows+='<tr><td style="'+TD+'">Ordine Cliente N.</td><td style="'+TV+'">'+intervento.ordine_num+(intervento.ordine_data?' del '+fmtD(intervento.ordine_data):'')+'</td></tr>';
+  // ─── Composizione HTML ────────────────────────────────────────────────────────
+  let html = '<div style="font-family:Arial,Helvetica,sans-serif;color:#1a1a2e;font-size:11px">';
 
-  // Righe cliente
-  let cliRows = '';
-  cliRows += '<tr style="'+RS+'"><td style="'+TD+'width:38%">Ragione sociale</td><td style="'+TV+'"><b>'+clNome+'</b></td></tr>';
-  if(cl&&cl.indirizzo_completo) cliRows+='<tr style="'+RS+'"><td style="'+TD+'">Indirizzo</td><td style="'+TV+'">'+cl.indirizzo_completo+'</td></tr>';
-  if(cl&&cl.ref)   cliRows+='<tr style="'+RS+'"><td style="'+TD+'">Referente</td><td style="'+TV+'">'+cl.ref+'</td></tr>';
-  if(cl&&cl.tel)   cliRows+='<tr style="'+RS+'"><td style="'+TD+'">Telefono</td><td style="'+TV+'">'+cl.tel+'</td></tr>';
-  if(cl&&cl.email) cliRows+='<tr style="'+RS+'"><td style="'+TD+'">Email</td><td style="'+TV+'">'+cl.email+'</td></tr>';
-  if(cl&&cl.piva)  cliRows+='<tr style="'+RS+'"><td style="'+TD+'">P.IVA</td><td style="'+TV+'">'+cl.piva+'</td></tr>';
-  if(cl&&cl.citta) cliRows+='<tr><td style="'+TD+'">Città</td><td style="'+TV+'">'+cl.citta+'</td></tr>';
-
-  let html = '<div style="font-family:Arial,Helvetica,sans-serif;color:#1a1a2e;font-size:13px">';
-
-  // INTESTAZIONE — tabella invece di flex
-  html += '<table width="100%" cellpadding="0" cellspacing="0" style="background:#1a3a6e;border-collapse:collapse">';
-  html += '<tr>';
-  html += '<td style="padding:18px 28px 14px;color:#fff">';
-  html += '<div style="font-size:22px;font-weight:800">Tekno<span style="font-weight:400">Automazione</span></div>';
-  html += '<div style="font-size:10px;opacity:.7;letter-spacing:2px;text-transform:uppercase;margin-top:2px">Rapporto Intervento Tecnico</div>';
-  html += '</td>';
-  html += '<td align="right" style="padding:18px 28px 14px;color:#fff;font-size:11px;vertical-align:top;opacity:.85">';
-  html += '<div>Data: '+fmtD(intervento.data)+'</div>';
-  html += '<div style="margin-top:2px">Intervento #'+intervento.id+'</div>';
-  html += '</td>';
-  html += '</tr></table>';
+  // INTESTAZIONE
+  html += `<table width="100%" cellpadding="0" cellspacing="0" style="background:#1a3a6e;border-collapse:collapse">
+    <tr>
+      <td style="padding:14px 22px 11px;color:#fff">
+        <div style="font-size:19px;font-weight:800">Tekno<span style="font-weight:400">Automazione</span></div>
+        <div style="font-size:8.5px;opacity:.7;letter-spacing:2px;text-transform:uppercase;margin-top:2px">Rapporto Intervento Tecnico</div>
+      </td>
+      <td align="right" style="padding:14px 22px 11px;color:#fff;font-size:9.5px;vertical-align:top;opacity:.85">
+        <div>Data: ${fmtD(intervento.data)}</div>
+        <div style="margin-top:2px">Intervento #${intervento.id}</div>
+      </td>
+    </tr>
+  </table>`;
 
   // TITOLO
-  html += '<div style="background:#eef3fb;padding:12px 28px;border-bottom:3px solid #1a3a6e">';
-  html += '<div style="font-size:15px;font-weight:700;color:#1a3a6e">'+(intervento.titolo||'—')+'</div>';
-  if(intervento.indirizzo) html += '<div style="font-size:10px;color:#555;margin-top:2px">&#128205; '+intervento.indirizzo+'</div>';
-  html += '</div>';
+  html += `<div style="background:#eef3fb;padding:9px 22px;border-bottom:3px solid #1a3a6e">
+    <div style="font-size:13px;font-weight:700;color:#1a3a6e">${intervento.titolo||'—'}</div>
+    ${intervento.indirizzo?`<div style="font-size:8.5px;color:#555;margin-top:2px">&#128205; ${intervento.indirizzo}</div>`:''}
+  </div>`;
 
-  html += '<div style="padding:16px 28px">';
+  html += '<div style="padding:12px 22px">';
 
-  // RIFERIMENTI + CLIENTE — tabella a due celle invece di flex
-  html += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:14px;border-collapse:collapse">';
-  html += '<tr valign="top">';
-  // Cella sinistra: Riferimenti
-  html += '<td style="width:50%;padding-right:6px">';
-  html += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #dde3ee">';
-  html += '<tr><td colspan="2" style="'+HS+'">Riferimenti documento</td></tr>';
-  html += rifRows;
-  html += '</table></td>';
-  // Cella destra: Cliente
-  html += '<td style="width:50%;padding-left:6px">';
-  html += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #dde3ee">';
-  html += '<tr><td colspan="2" style="'+HS+'">Dati cliente</td></tr>';
-  html += cliRows;
-  html += '</table></td>';
-  html += '</tr></table>';
+  // RIGA 1 — Riferimenti + Cliente (due box 340×152 affiancati)
+  html += `<div style="width:${FULL_W};margin-bottom:11px;white-space:nowrap">
+    ${rifBlock}${cliBlock}
+  </div>`;
 
-  // ORE LAVORO
-  html += '<div style="margin-bottom:14px">';
-  html += '<div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#1a3a6e;margin-bottom:6px">Dettaglio ore lavoro</div>';
-  html += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #dde3ee">';
-  html += '<tr style="background:#1a3a6e;color:#fff">';
-  html += '<th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:600;width:4%">#</th>';
-  html += '<th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:600;width:18%">Data</th>';
-  html += '<th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:600;width:14%">Dalle</th>';
-  html += '<th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:600;width:14%">Alle</th>';
-  html += '<th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:600;width:14%">Pausa</th>';
-  html += '<th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:600">Ore nette</th>';
-  html += '</tr>';
-  html += '<tbody style="background:#fff">'+oreRows+'</tbody>';
-  html += '<tr style="background:#eef3fb;border-top:2px solid #1a3a6e">';
-  html += '<td colspan="5" align="right" style="padding:7px 8px;font-size:11px;font-weight:700;color:#1a3a6e">TOTALE ORE LAVORO</td>';
-  html += '<td style="padding:7px 8px;font-size:13px;font-weight:800;color:#1a3a6e">'+formatOre(parseFloat(intervento.ore_totali||0))+'</td>';
-  html += '</tr></table></div>';
+  // RIGA 2 — Dettaglio ore lavoro (larghezza = FULL_W, allineata ai box)
+  html += `<div style="width:${FULL_W};margin-bottom:11px">
+    <div style="${HS_BLUE};border-radius:3px 3px 0 0">Dettaglio ore lavoro</div>
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1.5px solid #1a3a6e;border-top:none">
+      <tr style="background:#dde8f7">
+        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#1a3a6e;width:4%">#</th>
+        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#1a3a6e;width:19%">Data</th>
+        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#1a3a6e;width:14%">Dalle</th>
+        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#1a3a6e;width:14%">Alle</th>
+        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#1a3a6e;width:15%">Pausa</th>
+        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#1a3a6e">Ore nette</th>
+      </tr>
+      <tbody style="background:#fff">${oreRows}</tbody>
+      <tr style="background:#eef3fb;border-top:1.5px solid #1a3a6e">
+        <td colspan="5" align="right" style="padding:5px 6px;font-size:8.5px;font-weight:700;color:#1a3a6e">TOTALE ORE LAVORO</td>
+        <td style="padding:5px 6px;font-size:11px;font-weight:800;color:#1a3a6e">${formatOre(parseFloat(intervento.ore_totali||0))}</td>
+      </tr>
+    </table>
+  </div>`;
 
-  // ORE VIAGGIO + KM
-  const viaggioEntries = intervento.ore_viaggio_entries || [];
-  const viaggioKmTotale = viaggioEntries.reduce((s,e)=>s+(parseFloat(e.km)||0),0);
-  const viaggioRows = viaggioEntries.map((e,idx)=>{
-    const ore = calcolaOreDaViaggioEntry(e);
-    return `<tr style="border-bottom:1px solid #eee"><td style="padding:5px 8px;font-size:11px">${idx+1}</td><td style="padding:5px 8px;font-size:11px">${e.data?fmtD(e.data):''}</td><td style="padding:5px 8px;font-size:11px">${e.dalle||'—'}</td><td style="padding:5px 8px;font-size:11px">${e.alle||'—'}</td><td style="padding:5px 8px;font-size:11px;font-weight:700">${e.km||0} km</td><td style="padding:5px 8px;font-size:11px;font-weight:700">${formatOre(ore)}</td></tr>`;
-  }).join('');
-  html += '<div style="margin-bottom:14px">';
-  html += '<div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#8b3a00;margin-bottom:6px">Ore viaggio &amp; Chilometri</div>';
-  html += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #dde3ee;margin-bottom:0">';
-  html += '<tr style="background:#8b3a00;color:#fff"><th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:600;width:4%">#</th><th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:600;width:18%">Data</th><th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:600;width:14%">Dalle</th><th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:600;width:14%">Alle</th><th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:600;width:14%">Km</th><th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:600">Ore viaggio</th></tr>';
-  html += '<tbody style="background:#fff">'+(viaggioRows||'<tr><td colspan="6" style="padding:8px;text-align:center;font-size:11px;color:#999">Nessuna ora di viaggio</td></tr>')+'</tbody>';
-  html += '<tr style="background:#fff3ee;border-top:2px solid #8b3a00">';
-  html += '<td colspan="4" align="right" style="padding:7px 8px;font-size:11px;font-weight:700;color:#8b3a00">TOTALE KM</td>';
-  html += '<td style="padding:7px 8px;font-size:13px;font-weight:800;color:#8b3a00">'+viaggioKmTotale+' km</td>';
-  html += '<td style="padding:7px 8px;font-size:13px;font-weight:800;color:#8b3a00">'+formatOre(parseFloat(intervento.ore_viaggio_totali||0))+'</td>';
-  html += '</tr>';
-  html += '</table>';
-  html += '</div>';
+  // RIGA 3 — Ore viaggio + km (stessa larghezza FULL_W)
+  html += `<div style="width:${FULL_W};margin-bottom:11px">
+    <div style="${HS_BROWN};border-radius:3px 3px 0 0">Ore viaggio &amp; Chilometri</div>
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1.5px solid #7a3200;border-top:none">
+      <tr style="background:#f5e5d8">
+        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#7a3200;width:4%">#</th>
+        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#7a3200;width:19%">Data</th>
+        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#7a3200;width:14%">Dalle</th>
+        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#7a3200;width:14%">Alle</th>
+        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#7a3200;width:15%">Km</th>
+        <th style="padding:4px 6px;text-align:left;font-size:8px;color:#7a3200">Ore viaggio</th>
+      </tr>
+      <tbody style="background:#fff">${viaggioRows}</tbody>
+      <tr style="background:#fff3ee;border-top:1.5px solid #7a3200">
+        <td colspan="4" align="right" style="padding:5px 6px;font-size:8.5px;font-weight:700;color:#7a3200">TOTALE KM / ORE VIAGGIO</td>
+        <td style="padding:5px 6px;font-size:11px;font-weight:800;color:#7a3200">${viaggioKmTotale} km</td>
+        <td style="padding:5px 6px;font-size:11px;font-weight:800;color:#7a3200">${formatOre(parseFloat(intervento.ore_viaggio_totali||0))}</td>
+      </tr>
+    </table>
+  </div>`;
 
-  // DESCRIZIONE
-  html += '<div style="margin-bottom:14px">';
-  html += '<div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#1a3a6e;margin-bottom:6px">Descrizione lavori</div>';
-  html += '<div style="background:#f8f9fb;border:1px solid #dde3ee;padding:12px 14px;font-size:11px;line-height:1.7;min-height:60px;color:#333">'+(intervento.descrizione||'')+'</div>';
-  html += '</div>';
+  // RIGA 4 — Descrizione (stessa larghezza FULL_W)
+  html += `<div style="width:${FULL_W};margin-bottom:11px">
+    <div style="${HS_BLUE};border-radius:3px 3px 0 0">Descrizione lavori</div>
+    <div style="background:#f8f9fb;border:1.5px solid #1a3a6e;border-top:none;padding:9px 11px;font-size:9.5px;line-height:1.65;min-height:44px;color:#333">${intervento.descrizione||''}</div>
+  </div>`;
 
-  // FIRME — tabella a due celle invece di flex
-  html += '<div>';
-  html += '<div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#1a3a6e;margin-bottom:8px">Firme di accettazione</div>';
-  html += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">';
-  html += '<tr valign="top">';
-  // Firma Tecnico
-  html += '<td style="width:50%;padding-right:6px">';
-  html += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #dde3ee">';
-  html += '<tr><td style="'+HS+'">Tecnico esecutore</td></tr>';
-  html += '<tr><td style="padding:10px 14px;background:#f8f9fb;height:100px">';
-  html += sigTecnico;
-  html += '<div style="font-size:10px;color:#555;margin-top:6px">Nome: ___________________________</div>';
-  html += '<div style="font-size:10px;color:#555;margin-top:3px">Data: '+fmtD(intervento.data)+'</div>';
-  html += '</td></tr></table></td>';
-  // Firma Cliente
-  html += '<td style="width:50%;padding-left:6px">';
-  html += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #dde3ee">';
-  html += '<tr><td style="'+HS+'">Cliente &mdash; Accettazione lavori</td></tr>';
-  html += '<tr><td style="padding:10px 14px;background:#f8f9fb;height:100px">';
-  html += sigCliente;
-  html += '<div style="font-size:10px;color:#555;margin-top:6px">Nome: ___________________________</div>';
-  html += '<div style="font-size:10px;color:#555;margin-top:3px">Data: '+fmtD(intervento.data)+'</div>';
-  html += '</td></tr></table></td>';
-  html += '</tr></table></div>';
+  // RIGA 5 — Firme (due box 340×152, stesso schema riferimenti/cliente)
+  html += `<div style="width:${FULL_W};white-space:nowrap">
+    <div style="font-size:8.5px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#1a3a6e;margin-bottom:6px;white-space:normal">Firme di accettazione</div>
+    ${firmaBox('Tecnico esecutore', sigTecnico, false)}
+    ${firmaBox('Cliente &mdash; Accettazione lavori', sigCliente, true)}
+  </div>`;
 
   html += '</div>';
 
-  // FOOTER — tabella invece di flex
-  html += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;background:#f0f2f7;border-top:1px solid #dde3ee;margin-top:12px">';
-  html += '<tr>';
-  html += '<td style="padding:7px 28px;font-size:10px;color:#888">Tekno Automazione &mdash; Documento generato il '+new Date().toLocaleDateString('it-IT')+'</td>';
-  html += '<td align="right" style="padding:7px 28px;font-size:10px;color:#888">Intervento #'+intervento.id+'</td>';
-  html += '</tr></table>';
+  // FOOTER
+  html += `<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;background:#f0f2f7;border-top:1px solid #dde3ee;margin-top:10px">
+    <tr>
+      <td style="padding:5px 22px;font-size:8.5px;color:#888">Tekno Automazione &mdash; Documento generato il ${new Date().toLocaleDateString('it-IT')}</td>
+      <td align="right" style="padding:5px 22px;font-size:8.5px;color:#888">Intervento #${intervento.id}</td>
+    </tr>
+  </table>`;
 
   html += '</div>';
 
@@ -1675,7 +1717,6 @@ function exportToPDF(intervento) {
   }).from(html).save();
   showToast('PDF generato!');
 }
-
 
 // ─── MOBILE MENU ─────────────────────────────────────────────────────────────
 function toggleMobMenu() {
