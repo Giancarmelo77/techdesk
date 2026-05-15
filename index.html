@@ -303,14 +303,6 @@
           </div>
           <div class="total-hours" id="total_ore_display">Totale Ore Lavoro: 0:00</div>
           <input type="hidden" id="f_ore_totali">
-        </div>
-        <div class="form-group full">
-          <label class="form-label">🚗 Ore Viaggio</label>
-          <div class="hours-container">
-            <div id="hours-viaggio-list"></div>
-            <button type="button" class="btn-add-hour" onclick="addViaggioEntry()">+ Aggiungi fascia viaggio</button>
-          </div>
-          <div style="background:var(--orange);color:#fff;padding:10px 16px;border-radius:8px;font-weight:800;font-size:16px;text-align:center;margin-top:12px;font-family:var(--mono)" id="total_viaggio_display">Totale Ore Viaggio: 0:00 | Totale Km: 0</div>
           <input type="hidden" id="f_ore_viaggio_totali">
           <input type="hidden" id="f_km_viaggio_totali">
         </div>
@@ -733,10 +725,22 @@ function calcolaOreDaEntry(e) {
   let h=(ah+am/60)-(dh+dm/60); if(h<0)h+=24;
   return Math.max(0,h-(parseFloat(e.pausa)||0)/60);
 }
+function oreViaggioFromTime(t) {
+  if(!t) return 0;
+  const [h,m]=t.split(':').map(Number);
+  return (h||0)+(m||0)/60;
+}
 function calcolaOreTotaliMulti() {
   const tot=oreEntries.reduce((s,e)=>s+calcolaOreDaEntry(e),0);
-  document.getElementById('total_ore_display').innerHTML=`Totale Ore Lavoro: ${formatOre(tot)}`;
+  const totViaggio=oreEntries.reduce((s,e)=>s+oreViaggioFromTime(e.ore_viaggio),0);
+  const totKm=oreEntries.reduce((s,e)=>s+(parseFloat(e.km)||0),0);
+  document.getElementById('total_ore_display').innerHTML=
+    `Totale Ore Lavoro: ${formatOre(tot)}${totViaggio>0?' &nbsp;|&nbsp; Ore Viaggio: '+formatOre(totViaggio):''}${totKm>0?' &nbsp;|&nbsp; Km: '+totKm+' km':''}` ;
   document.getElementById('f_ore_totali').value=tot.toFixed(2);
+  const inpV=document.getElementById('f_ore_viaggio_totali');
+  if(inpV) inpV.value=totViaggio.toFixed(2);
+  const inpK=document.getElementById('f_km_viaggio_totali');
+  if(inpK) inpK.value=totKm;
   return tot;
 }
 function calcolaOreDaViaggioEntry(e) {
@@ -771,7 +775,7 @@ function renderViaggioList() {
   </div>`).join('');
   calcolaOreViaggioTotali();
 }
-function addHourEntry(dalle='',alle='',pausa='0',data='') { oreEntries.push({id:genId('H'),dalle,alle,pausa,data}); renderHoursList(); }
+function addHourEntry(dalle='',alle='',pausa='0',data='',ore_viaggio='',km='') { oreEntries.push({id:genId('H'),dalle,alle,pausa,data,ore_viaggio,km}); renderHoursList(); }
 function removeHourEntry(id) { oreEntries=oreEntries.filter(e=>e.id!==id); renderHoursList(); }
 function updateHourEntry(id,field,value) { const e=oreEntries.find(e=>e.id===id); if(e){e[field]=value;calcolaOreTotaliMulti();} }
 function renderHoursList() {
@@ -781,7 +785,9 @@ function renderHoursList() {
     <div class="form-group"><label style="font-size:10px">Data</label><input type="date" class="form-control" value="${e.data||''}" onchange="updateHourEntry('${e.id}','data',this.value)"></div>
     <div class="form-group"><label style="font-size:10px">Dalle</label><input type="time" class="form-control" value="${e.dalle}" onchange="updateHourEntry('${e.id}','dalle',this.value)"></div>
     <div class="form-group"><label style="font-size:10px">Alle</label><input type="time" class="form-control" value="${e.alle}" onchange="updateHourEntry('${e.id}','alle',this.value)"></div>
-    <div class="form-group"><label style="font-size:10px">Pausa (min)</label><input type="number" step="5" class="form-control" value="${e.pausa}" onchange="updateHourEntry('${e.id}','pausa',this.value)"></div>
+    <div class="form-group"><label style="font-size:10px">Pausa (min)</label><input type="number" step="5" min="0" class="form-control" value="${e.pausa}" onchange="updateHourEntry('${e.id}','pausa',this.value)"></div>
+    <div class="form-group"><label style="font-size:10px">Ore viaggio</label><input type="time" class="form-control" value="${e.ore_viaggio||''}" onchange="updateHourEntry('${e.id}','ore_viaggio',this.value)"></div>
+    <div class="form-group" style="max-width:90px"><label style="font-size:10px">Km percorsi</label><input type="number" step="1" min="0" class="form-control" placeholder="0" value="${e.km||''}" onchange="updateHourEntry('${e.id}','km',this.value)"></div>
     <button class="btn-remove" onclick="removeHourEntry('${e.id}')">✕</button>
   </div>`).join('');
   calcolaOreTotaliMulti();
@@ -940,7 +946,6 @@ function openNewIntervento() {
   document.getElementById('f_stato_fattura').value='';
   document.getElementById('file_preview').innerHTML='';
   renderHoursList();
-  renderViaggioList();
   document.getElementById('f_stato').onchange = function() {
     if (this.value !== 'chiuso') {
       document.getElementById('f_stato_fattura').value = '';
@@ -961,8 +966,8 @@ function openNewIntervento() {
 function openEditIntervento(id) {
   const i=interventi.find(x=>x.id===id); if(!i) return;
   editingId=id; pendingFiles=i.files?[...i.files]:[];
-  oreEntries=(i.ore_entries&&i.ore_entries.length)?i.ore_entries.map(e=>({id:genId('H'),dalle:e.dalle||'',alle:e.alle||'',pausa:e.pausa||'0',data:e.data||''})):[];
-  oreViaggioEntries=(i.ore_viaggio_entries&&i.ore_viaggio_entries.length)?i.ore_viaggio_entries.map(e=>({id:genId('V'),dalle:e.dalle||'',alle:e.alle||'',km:e.km||'',data:e.data||''})):[];
+  oreEntries=(i.ore_entries&&i.ore_entries.length)?i.ore_entries.map(e=>({id:genId('H'),dalle:e.dalle||'',alle:e.alle||'',pausa:e.pausa||'0',data:e.data||'',ore_viaggio:e.ore_viaggio||'',km:e.km||''})):[];
+  oreViaggioEntries=[];
   document.getElementById('modal-title-intervento').textContent='Modifica Intervento';
   document.getElementById('f_titolo').value=i.titolo||'';
   document.getElementById('f_stato').value=i.stato||'aperto';
@@ -980,7 +985,6 @@ function openEditIntervento(id) {
   document.getElementById('f_stato_fattura').value=i.stato_fattura||'';
   document.getElementById('f_cliente').innerHTML='<option value="">— Seleziona —</option>'+clienti.map(c=>`<option value="${c.id}"${c.id===i.cliente?' selected':''}>${c.nome}</option>`).join('');
   renderHoursList();
-  renderViaggioList();
   renderFilePreview();
   document.getElementById('f_stato').onchange = function() {
     if (this.value !== 'chiuso') {
@@ -1068,9 +1072,9 @@ async function saveIntervento() {
     importo:document.getElementById('f_importo').value,
     stato_fattura:statoFatt,
     ore_totali:document.getElementById('f_ore_totali').value||'0',
-    ore_entries:oreEntries.map(e=>({data:e.data||'',dalle:e.dalle,alle:e.alle,pausa:e.pausa})),
+    ore_entries:oreEntries.map(e=>({data:e.data||'',dalle:e.dalle,alle:e.alle,pausa:e.pausa,ore_viaggio:e.ore_viaggio||'',km:e.km||''})),
     ore_viaggio_totali:document.getElementById('f_ore_viaggio_totali')?.value||'0',
-    ore_viaggio_entries:oreViaggioEntries.map(e=>({data:e.data||'',dalle:e.dalle,alle:e.alle,km:e.km||''})),
+    ore_viaggio_entries:oreEntries.filter(e=>e.ore_viaggio||e.km).map(e=>({data:e.data||'',dalle:'',alle:'',km:e.km||''})),
     km_totali:document.getElementById('f_km_viaggio_totali')?.value||'0'
   };
 
