@@ -725,6 +725,20 @@ function calcolaOreDaEntry(e) {
   let h=(ah+am/60)-(dh+dm/60); if(h<0)h+=24;
   return Math.max(0,h-(parseFloat(e.pausa)||0)/60);
 }
+function normalizzaOreViaggio(v) {
+  if(!v||v.trim()==''||v==='0:00') return '';
+  // accetta: 1, 1.5, 1:30, 01:30
+  v=v.trim();
+  if(v.includes(':')) {
+    const [h,m]= v.split(':').map(s=>parseInt(s)||0);
+    if(h===0&&m===0) return '';
+    return h+':'+m.toString().padStart(2,'0');
+  }
+  // numero decimale es. 1.5
+  const n=parseFloat(v); if(isNaN(n)||n<=0) return '';
+  const h=Math.floor(n), m=Math.round((n-h)*60);
+  return h+':'+m.toString().padStart(2,'0');
+}
 function oreViaggioFromTime(t) {
   if(!t) return 0;
   const [h,m]=t.split(':').map(Number);
@@ -786,7 +800,7 @@ function renderHoursList() {
     <div class="form-group"><label style="font-size:10px">Dalle</label><input type="time" class="form-control" value="${e.dalle}" onchange="updateHourEntry('${e.id}','dalle',this.value)"></div>
     <div class="form-group"><label style="font-size:10px">Alle</label><input type="time" class="form-control" value="${e.alle}" onchange="updateHourEntry('${e.id}','alle',this.value)"></div>
     <div class="form-group"><label style="font-size:10px">Pausa (min)</label><input type="number" step="5" min="0" class="form-control" value="${e.pausa}" onchange="updateHourEntry('${e.id}','pausa',this.value)"></div>
-    <div class="form-group"><label style="font-size:10px">Ore viaggio</label><input type="time" class="form-control" value="${e.ore_viaggio||''}" onchange="updateHourEntry('${e.id}','ore_viaggio',this.value)"></div>
+    <div class="form-group" style="max-width:80px"><label style="font-size:10px">Ore viaggio</label><input type="text" inputmode="numeric" maxlength="5" placeholder="0:00" class="form-control" value="${e.ore_viaggio||''}" onchange="updateHourEntry('${e.id}','ore_viaggio',this.value)" onblur="this.value=normalizzaOreViaggio(this.value);updateHourEntry('${e.id}','ore_viaggio',this.value)"></div>
     <div class="form-group" style="max-width:90px"><label style="font-size:10px">Km percorsi</label><input type="number" step="1" min="0" class="form-control" placeholder="0" value="${e.km||''}" onchange="updateHourEntry('${e.id}','km',this.value)"></div>
     <button class="btn-remove" onclick="removeHourEntry('${e.id}')">✕</button>
   </div>`).join('');
