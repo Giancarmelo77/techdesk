@@ -1771,23 +1771,19 @@ function exportToPDF(intervento) {
 
    // RIGA 2 — Ore lavoro
 // RIGA 2 — Ore lavoro (con Ore viaggio e Km Percorsi inline)
-const _totOreViaggio = parseFloat(intervento.ore_viaggio_totali||0);
-const _totKmViaggio  = viaggioEntries.reduce((s,e)=>s+(parseFloat(e.km)||0),0);
-const _hasViaggio    = viaggioEntries.length > 0;
-
-// Mappa le voci di viaggio per data per abbinarle alle righe lavoro (best-effort)
-const _viaggioByIdx = {};
-viaggioEntries.forEach((e,i)=>{ _viaggioByIdx[i]=e; });
-
-// Per ciascuna riga lavoro calcola ore viaggio e km della corrispondente riga viaggio (stesso indice, se esiste)
-const _oreEntriesWithViaggio = (intervento.ore_entries||[]).map((e,idx)=>{
-  const v = _viaggioByIdx[idx];
+// Legge ore_viaggio e km direttamente dalle ore_entries
+const _oreEntriesWithViaggio = (intervento.ore_entries||[]).map((e)=>{
+  const ov = e.ore_viaggio||'';
+  const km = parseFloat(e.km)||0;
   return {
     ...e,
-    _oreViaggio: v ? formatOre(calcolaOreDaViaggioEntry(v)) : '—',
-    _km: v ? (v.km||0)+' km' : '—'
+    _oreViaggio: ov ? ov : '—',
+    _km: km > 0 ? km+' km' : '—'
   };
 });
+const _totOreViaggio = parseFloat(intervento.ore_viaggio_totali||0);
+const _totKmViaggio  = (intervento.ore_entries||[]).reduce((s,e)=>s+(parseFloat(e.km)||0),0);
+const _hasViaggio    = (intervento.ore_entries||[]).some(e=>e.ore_viaggio||e.km);
 
 html += `<div style="width:${FULL_W};margin-bottom:11px">
   <div style="${HS_BLUE};border-radius:3px 3px 0 0">Dettaglio ore lavoro</div>
