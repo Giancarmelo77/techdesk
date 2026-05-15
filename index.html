@@ -1752,84 +1752,74 @@ function exportToPDF(intervento) {
   </div>`;
 
    // RIGA 2 — Ore lavoro
-// RIGA 2 — Ore lavoro - Versione senza table-layout:fixed
+// RIGA 2 — Ore lavoro (con Ore viaggio e Km Percorsi inline)
+const _totOreViaggio = parseFloat(intervento.ore_viaggio_totali||0);
+const _totKmViaggio  = viaggioEntries.reduce((s,e)=>s+(parseFloat(e.km)||0),0);
+const _hasViaggio    = viaggioEntries.length > 0;
+
+// Mappa le voci di viaggio per data per abbinarle alle righe lavoro (best-effort)
+const _viaggioByIdx = {};
+viaggioEntries.forEach((e,i)=>{ _viaggioByIdx[i]=e; });
+
+// Per ciascuna riga lavoro calcola ore viaggio e km della corrispondente riga viaggio (stesso indice, se esiste)
+const _oreEntriesWithViaggio = (intervento.ore_entries||[]).map((e,idx)=>{
+  const v = _viaggioByIdx[idx];
+  return {
+    ...e,
+    _oreViaggio: v ? formatOre(calcolaOreDaViaggioEntry(v)) : '—',
+    _km: v ? (v.km||0)+' km' : '—'
+  };
+});
+
 html += `<div style="width:${FULL_W};margin-bottom:11px">
   <div style="${HS_BLUE};border-radius:3px 3px 0 0">Dettaglio ore lavoro</div>
   <div style="border:1.5px solid #1a3a6e;border-top:none;overflow-x:auto;">
     <table style="width:100%;border-collapse:collapse;min-width:650px;">
       <thead>
-        <tr style="background:#fff;border-bottom:1px solid #dde3ee">
-          <th style="padding:6px 8px;text-align:left;font-size:8px;color:#fff;width:30px;font-weight:700">#</th>
-          <th style="padding:6px 8px;text-align:left;font-size:8px;color:#fff;width:100px;font-weight:700">Data</th>
-          <th style="padding:6px 8px;text-align:left;font-size:8px;color:#fff;width:80px;font-weight:700">Dalle</th>
-          <th style="padding:6px 8px;text-align:left;font-size:8px;color:#fff;width:80px;font-weight:700">Alle</th>
-          <th style="padding:6px 8px;text-align:left;font-size:8px;color:#fff;width:80px;font-weight:700">Pausa</th>
+        <tr style="background:#1a3a6e;border-bottom:1px solid #dde3ee">
+          <th style="padding:6px 8px;text-align:left;font-size:8px;color:#fff;width:24px;font-weight:700">#</th>
+          <th style="padding:6px 8px;text-align:left;font-size:8px;color:#fff;width:80px;font-weight:700">Data</th>
+          <th style="padding:6px 8px;text-align:left;font-size:8px;color:#fff;width:56px;font-weight:700">Dalle</th>
+          <th style="padding:6px 8px;text-align:left;font-size:8px;color:#fff;width:56px;font-weight:700">Alle</th>
+          <th style="padding:6px 8px;text-align:left;font-size:8px;color:#fff;width:56px;font-weight:700">Pausa</th>
+          <th style="padding:6px 8px;text-align:right;font-size:8px;color:#fff;width:72px;font-weight:700">Ore viaggio</th>
+          <th style="padding:6px 8px;text-align:right;font-size:8px;color:#fff;width:72px;font-weight:700">Km percorsi</th>
           <th style="padding:6px 8px;text-align:right;font-size:8px;color:#fff;font-weight:700">Ore nette</th>
         </tr>
       </thead>
       <tbody>
-        ${intervento.ore_entries && intervento.ore_entries.length ? intervento.ore_entries.map((e,idx) => `
+        ${_oreEntriesWithViaggio.length ? _oreEntriesWithViaggio.map((e,idx) => `
           <tr style="border-bottom:1px solid #e5e7eb">
             <td style="padding:6px 8px;font-size:9px">${idx+1}</td>
             <td style="padding:6px 8px;font-size:9px">${e.data?fmtD(e.data):'—'}</td>
             <td style="padding:6px 8px;font-size:9px">${e.dalle||'—'}</td>
             <td style="padding:6px 8px;font-size:9px">${e.alle||'—'}</td>
             <td style="padding:6px 8px;font-size:9px">${e.pausa||0} min</td>
+            <td style="padding:6px 8px;font-size:9px;text-align:right;color:#7a4a00">${e._oreViaggio}</td>
+            <td style="padding:6px 8px;font-size:9px;text-align:right;color:#7a4a00">${e._km}</td>
             <td style="padding:6px 8px;font-size:9px;font-weight:600;text-align:right">${formatOre(calcolaOreDaEntry(e))}</td>
           </tr>
         `).join('') : `
           <tr>
-            <td colspan="6" style="padding:12px;font-size:9px;color:#888;text-align:center">Nessuna fascia oraria</td>
+            <td colspan="8" style="padding:12px;font-size:9px;color:#888;text-align:center">Nessuna fascia oraria</td>
           </tr>
         `}
       </tbody>
       <tfoot>
         <tr style="background:#eef3fb;border-top:1.5px solid #1a3a6e">
-          <td colspan="5" align="right" style="padding:6px 8px;font-size:8.5px;font-weight:700;color:#1a3a6e">TOTALE ORE LAVORO</td>
+          <td colspan="7" align="right" style="padding:6px 8px;font-size:8.5px;font-weight:700;color:#1a3a6e">TOTALE ORE LAVORO</td>
           <td style="padding:6px 8px;font-size:11px;font-weight:800;color:#1a3a6e;text-align:right">${formatOre(parseFloat(intervento.ore_totali||0))}</td>
         </tr>
-      </tfoot>
-    </table>
-  </div>
-</div>`;
-
-// RIGA 3 — Ore viaggio
-html += `<div style="width:${FULL_W};margin-bottom:11px">
-  <div style="${HS_BROWN};border-radius:3px 3px 0 0">Ore viaggio &amp; Chilometri</div>
-  <div style="border:1.5px solid #7a3200;border-top:none;overflow-x:auto;">
-    <table style="width:100%;border-collapse:collapse;min-width:650px;">
-      <thead>
-        <tr style="background:#fff;border-bottom:1px solid #f5e5d8">
-          <th style="padding:6px 8px;text-align:left;font-size:8px;color:#fff;width:30px;font-weight:700">#</th>
-          <th style="padding:6px 8px;text-align:left;font-size:8px;color:#fff;width:100px;font-weight:700">Data</th>
-          <th style="padding:6px 8px;text-align:left;font-size:8px;color:#fff;width:80px;font-weight:700">Dalle</th>
-          <th style="padding:6px 8px;text-align:left;font-size:8px;color:#fff;width:80px;font-weight:700">Alle</th>
-          <th style="padding:6px 8px;text-align:left;font-size:8px;color:#fff;width:80px;font-weight:700">Km</th>
-          <th style="padding:6px 8px;text-align:right;font-size:8px;color:#fff;font-weight:700">Ore viaggio</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${viaggioEntries.length ? viaggioEntries.map((e,idx) => `
-          <tr style="border-bottom:1px solid #eee">
-            <td style="padding:6px 8px;font-size:9px">${idx+1}</td>
-            <td style="padding:6px 8px;font-size:9px">${e.data?fmtD(e.data):'—'}</td>
-            <td style="padding:6px 8px;font-size:9px">${e.dalle||'—'}</td>
-            <td style="padding:6px 8px;font-size:9px">${e.alle||'—'}</td>
-            <td style="padding:6px 8px;font-size:9px;font-weight:600">${e.km||0} km</td>
-            <td style="padding:6px 8px;font-size:9px;font-weight:600;text-align:right">${formatOre(calcolaOreDaViaggioEntry(e))}</td>
-          </tr>
-        `).join('') : `
-          <tr>
-            <td colspan="6" style="padding:12px;font-size:9px;color:#888;text-align:center">Nessuna fascia di viaggio</td>
-          </tr>
-        `}
-      </tbody>
-      <tfoot>
-        <tr style="background:#fff3ee;border-top:1.5px solid #7a3200">
-          <td colspan="4" align="right" style="padding:6px 8px;font-size:8.5px;font-weight:700;color:#7a3200">TOTALE KM / ORE VIAGGIO</td>
-          <td style="padding:6px 8px;font-size:11px;font-weight:800;color:#7a3200">${viaggioKmTotale} km</td>
-          <td style="padding:6px 8px;font-size:11px;font-weight:800;color:#7a3200;text-align:right">${formatOre(parseFloat(intervento.ore_viaggio_totali||0))}</td>
-        </tr>
+        ${_hasViaggio && _totOreViaggio > 0 ? `
+        <tr style="background:#fff8f3;border-top:1px solid #e8d5c4">
+          <td colspan="7" align="right" style="padding:6px 8px;font-size:8.5px;font-weight:700;color:#7a3200">TOTALE ORE VIAGGIO</td>
+          <td style="padding:6px 8px;font-size:11px;font-weight:800;color:#7a3200;text-align:right">${formatOre(_totOreViaggio)}</td>
+        </tr>` : ''}
+        ${_hasViaggio && _totKmViaggio > 0 ? `
+        <tr style="background:#fff8f3;border-top:1px solid #e8d5c4">
+          <td colspan="7" align="right" style="padding:6px 8px;font-size:8.5px;font-weight:700;color:#7a3200">TOTALE KM PERCORSI</td>
+          <td style="padding:6px 8px;font-size:11px;font-weight:800;color:#7a3200;text-align:right">${_totKmViaggio} km</td>
+        </tr>` : ''}
       </tfoot>
     </table>
   </div>
